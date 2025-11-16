@@ -61,7 +61,7 @@ export default function UploadWizard() {
         throw new Error("Invalid server response");
       }
 
-      router.push(`/chapters/${chapterId}`);
+      router.push(`/chapters?id=${chapterId}`);
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Upload failed. Try again.";

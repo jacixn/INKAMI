@@ -41,7 +41,7 @@ export default function Home() {
               Upload a chapter
             </Link>
             <Link
-              href="/reader/demo"
+              href="/reader?id=demo"
               className="rounded-full border border-white/30 px-6 py-3 text-sm font-semibold text-white/80"
             >
               Watch live demo

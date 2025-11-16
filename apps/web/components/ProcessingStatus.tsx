@@ -127,7 +127,7 @@ export default function ProcessingStatus({ chapterId }: ProcessingStatusProps) {
           Upload more
         </Link>
         <Link
-          href={`/reader/${chapterId}`}
+          href={`/reader?id=${chapterId}`}
           className={cn(
             "rounded-full px-4 py-2 text-sm font-semibold transition",
             status === "ready"
