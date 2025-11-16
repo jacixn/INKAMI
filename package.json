@@ -1,0 +1,17 @@
+{
+  "name": "inkami",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "apps/web",
+    "packages/shared-schemas"
+  ],
+  "scripts": {
+    "dev:web": "cd apps/web && npm run dev",
+    "build:web": "cd apps/web && npm run build",
+    "lint:web": "cd apps/web && npm run lint",
+    "typecheck": "cd apps/web && npm run typecheck",
+    "export:web": "cd apps/web && npm run export"
+  }
+}
+

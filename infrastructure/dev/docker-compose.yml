@@ -1,0 +1,57 @@
+version: "3.9"
+
+services:
+  api:
+    build:
+      context: ../../apps/server
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    env_file:
+      - ../../apps/server/.env.example
+    volumes:
+      - ../../apps/server:/app
+    ports:
+      - "8000:8000"
+    depends_on:
+      - redis
+      - postgres
+      - minio
+
+  worker:
+    build:
+      context: ../../apps/server
+    command: python -m app.workers.worker
+    env_file:
+      - ../../apps/server/.env.example
+    volumes:
+      - ../../apps/server:/app
+    depends_on:
+      - redis
+
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+
+  postgres:
+    image: supabase/postgres:15.6.1.66
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: inkami
+    ports:
+      - "5432:5432"
+
+  minio:
+    image: minio/minio:RELEASE.2024-08-03T04-33-23Z
+    environment:
+      MINIO_ACCESS_KEY: inkami
+      MINIO_SECRET_KEY: inkami-secret
+    command: server /data --console-address :9001
+    volumes:
+      - minio_data:/data
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+
+volumes:
+  minio_data:
+

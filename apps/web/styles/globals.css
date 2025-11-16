@@ -1,0 +1,104 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+  background-color: #05060a;
+}
+
+body {
+  margin: 0;
+  background: radial-gradient(circle at top, rgba(94, 105, 255, 0.12), #05060a);
+  color: #f5f7fb;
+  min-height: 100vh;
+}
+
+.card {
+  @apply rounded-3xl border border-white/10 bg-white/5 p-6 shadow-2xl shadow-black/50 backdrop-blur-md;
+}
+
+.glass-panel {
+  @apply rounded-[32px] border border-white/10 bg-white/5 backdrop-blur-2xl;
+}
+
+.noise-mask {
+  background-image: radial-gradient(circle, rgba(255, 255, 255, 0.15) 1px, transparent 1px);
+  background-size: 3px 3px;
+}
+
+@keyframes auroraMoveA {
+  0% {
+    transform: translate3d(-10%, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(15%, -10%, 0) scale(1.1);
+  }
+  100% {
+    transform: translate3d(-10%, 0, 0) scale(1);
+  }
+}
+
+@keyframes auroraMoveB {
+  0% {
+    transform: translate3d(10%, -5%, 0) scale(1.05);
+  }
+  50% {
+    transform: translate3d(-20%, 10%, 0) scale(0.95);
+  }
+  100% {
+    transform: translate3d(10%, -5%, 0) scale(1.05);
+  }
+}
+
+@keyframes auroraMoveC {
+  0% {
+    transform: translate3d(0, 10%, 0) scale(1.1);
+  }
+  50% {
+    transform: translate3d(5%, -15%, 0) scale(0.9);
+  }
+  100% {
+    transform: translate3d(0, 10%, 0) scale(1.1);
+  }
+}
+
+.animate-aurora-0 {
+  animation: auroraMoveA 28s ease-in-out infinite;
+}
+
+.animate-aurora-1 {
+  animation: auroraMoveB 32s ease-in-out infinite;
+}
+
+.animate-aurora-2 {
+  animation: auroraMoveC 24s ease-in-out infinite;
+}
+
+@keyframes marqueeScroll {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 200% 50%;
+  }
+}
+
+@keyframes pulseOrbit {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
