@@ -46,14 +46,6 @@ export default function Home() {
             >
               Watch live demo
             </Link>
-            <Link
-              href="https://github.com/jacixn"
-              target="_blank"
-              rel="noreferrer"
-              className="rounded-full border border-white/10 px-6 py-3 text-sm font-semibold text-white/70"
-            >
-              GitHub · jacixn
-            </Link>
           </div>
           <div className="flex flex-wrap gap-3 text-xs uppercase tracking-[0.3em] text-white/50">
             {heroHighlights.map((highlight) => (
