@@ -1,8 +1,8 @@
 const stats = [
-  { label: "Panels parsed", value: "4.8M+" },
-  { label: "Voices blended", value: "320+" },
-  { label: "Avg. process time", value: "58s" },
-  { label: "Languages planned", value: "3" }
+  { label: "Build stage", value: "Week 1 MVP" },
+  { label: "Voices shipping", value: "4 archetypes" },
+  { label: "Processing target", value: "<60s / chapter" },
+  { label: "Languages roadmap", value: "EN → JP/KR" }
 ];
 
 export default function StatsRibbon() {
