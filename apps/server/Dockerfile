@@ -1,0 +1,28 @@
+FROM python:3.11-slim AS base
+
+ENV POETRY_VERSION=1.8.3 \
+    POETRY_NO_INTERACTION=1 \
+    POETRY_VIRTUALENVS_CREATE=false \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PORT=8080
+
+WORKDIR /app
+
+# System deps for scientific/python tooling
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends build-essential libgl1 && \
+    rm -rf /var/lib/apt/lists/*
+
+# Install Poetry + deps
+COPY apps/server/pyproject.toml /app/pyproject.toml
+RUN pip install --no-cache-dir "poetry==${POETRY_VERSION}" && \
+    poetry install --no-root
+
+# Copy application code
+COPY apps/server /app
+
+EXPOSE ${PORT}
+
+CMD ["sh", "-c", "poetry run uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8080}"]
+

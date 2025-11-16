@@ -53,3 +53,46 @@ See `docs/pipeline.md` and `docs/api-contract.md` for deeper details.
 
 For local previews, run `npm run dev:web`. For the production static build the workflow automatically injects the correct base path so assets resolve on GitHub Pages.
 
+## Deploying the FastAPI backend on Fly.io
+
+1. **Install Fly tooling**
+   ```bash
+   curl -L https://fly.io/install.sh | sh
+   fly auth login
+   ```
+2. **Launch from `apps/server`**
+   ```bash
+   cd apps/server
+   fly launch --no-deploy
+   ```
+   The generated app name should match the `app` field in `fly.toml` (default `inkami-api`). Adjust `primary_region` if needed.
+3. **Provision backing services**
+   ```bash
+   fly postgres create --name inkami-db
+   fly redis create --name inkami-redis
+   ```
+   Capture the connection strings and inject them as secrets:
+   ```bash
+   fly secrets set \
+     DATABASE_URL="postgresql+asyncpg://..." \
+     REDIS_URL="redis://..." \
+     S3_ENDPOINT="https://<your-storage>" \
+     S3_BUCKET="inkami" \
+     S3_ACCESS_KEY="..." \
+     S3_SECRET_KEY="..." \
+     ELEVENLABS_API_KEY="..." \
+     DEEPSICK_API_KEY="..." \
+     FRONTEND_URL="https://jacixn.github.io/INKAMI"
+   ```
+   (Add any other env vars from `apps/server/.env.example`.)
+4. **Deploy**
+   ```bash
+   fly deploy
+   ```
+   This uses the included `Dockerfile` and runs both the API (`processes.web`) and the RQ worker (`processes.worker`).
+5. **Update the frontend**
+   - Copy the Fly app URL (e.g., `https://inkami-api.fly.dev`) into the GitHub secret `PUBLIC_API_URL`.
+   - Re-run the “Deploy Web to GitHub Pages” workflow so the static site points at the new backend.
+
+Fly automatically exposes the API over HTTPS, restarts machines if they crash, and can scale horizontally later via `fly scale count`.
+
