@@ -9,7 +9,7 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "export": "next build && next export"
+    "export": "next build"
   },
   "dependencies": {
     "axios": "^1.7.4",
