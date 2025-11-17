@@ -15,12 +15,12 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 # Install Poetry + deps
-COPY apps/server/pyproject.toml /app/pyproject.toml
+COPY pyproject.toml /app/pyproject.toml
 RUN pip install --no-cache-dir "poetry==${POETRY_VERSION}" && \
     poetry install --no-root
 
 # Copy application code
-COPY apps/server /app
+COPY . /app
 
 EXPOSE ${PORT}
 
