@@ -1,26 +1,23 @@
 "use client";
 
+import { useMemo } from "react";
+import { useSearchParams } from "next/navigation";
 import ProcessingStatus from "@/components/ProcessingStatus";
 
 const FALLBACK_CHAPTER_ID = "demo";
 
-function getChapterId(value?: string | string[]): string {
+function getChapterId(value?: string | null): string {
   if (!value) return FALLBACK_CHAPTER_ID;
-  const normalized = Array.isArray(value) ? value[0] : value;
-  const trimmed = normalized?.trim();
-  return trimmed && trimmed.length > 0 ? trimmed : FALLBACK_CHAPTER_ID;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : FALLBACK_CHAPTER_ID;
 }
 
-interface ChapterStatusPageProps {
-  searchParams?: {
-    id?: string | string[];
-  };
-}
+export default function ChapterStatusPage() {
+  const searchParams = useSearchParams();
 
-export default function ChapterStatusPage({
-  searchParams
-}: ChapterStatusPageProps) {
-  const chapterId = getChapterId(searchParams?.id);
+  const chapterId = useMemo(() => {
+    return getChapterId(searchParams?.get("id"));
+  }, [searchParams]);
 
   return (
     <div className="space-y-6">
