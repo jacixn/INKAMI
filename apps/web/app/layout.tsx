@@ -3,8 +3,9 @@ import type { Metadata } from "next";
 import { ReactNode } from "react";
 
 import Aurora from "@/components/Aurora";
-import { bodyFont, headingFont } from "./fonts";
+import AppShell from "@/components/AppShell";
 import { cn } from "@/lib/utils";
+import { bodyFont, headingFont } from "./fonts";
 
 export const metadata: Metadata = {
   title: "INKAMI | AI Manga Narrator",
@@ -23,11 +24,10 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         )}
       >
         <Aurora />
-        <div className="relative mx-auto max-w-6xl px-4 pb-20 pt-10 md:px-6 lg:px-8">
-          {children}
+        <div className="relative mx-auto max-w-6xl">
+          <AppShell>{children}</AppShell>
         </div>
       </body>
     </html>
   );
 }
-
