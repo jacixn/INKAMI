@@ -1,12 +1,18 @@
 "use client";
 
-import Link from "next/link";
+import Link, { type LinkProps } from "next/link";
 import { usePathname } from "next/navigation";
 
-const navItems = [
+interface NavItem {
+  label: string;
+  href: LinkProps["href"];
+  icon: (active: boolean) => JSX.Element;
+}
+
+const navItems: NavItem[] = [
   {
     label: "Listen",
-    href: "/reader?id=demo",
+    href: { pathname: "/reader", query: { id: "demo" } },
     icon: (active: boolean) => (
       <svg
         width="20"
@@ -49,7 +55,7 @@ const navItems = [
   },
   {
     label: "Status",
-    href: "/chapters?id=demo",
+    href: { pathname: "/chapters", query: { id: "demo" } },
     icon: (active: boolean) => (
       <svg
         width="20"
@@ -99,9 +105,13 @@ export default function BottomNav() {
     <nav className="pointer-events-none fixed inset-x-0 bottom-4 z-30 flex justify-center px-4">
       <div className="pointer-events-auto flex w-full max-w-md items-center justify-between rounded-[32px] border border-white/10 bg-black/60 px-4 py-3 shadow-[0_25px_60px_rgba(0,0,0,0.55)] backdrop-blur-xl">
         {navItems.map((item) => {
+          const hrefPath =
+            typeof item.href === "string"
+              ? item.href.split("?")[0]
+              : item.href.pathname ?? "/";
           const active =
-            pathname === item.href ||
-            (item.href !== "/" && pathname.startsWith(item.href.split("?")[0]));
+            pathname === hrefPath ||
+            (hrefPath !== "/" && pathname.startsWith(hrefPath));
           return (
             <Link
               key={item.label}
