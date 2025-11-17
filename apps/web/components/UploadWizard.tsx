@@ -5,6 +5,8 @@ import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { useMemo, useRef, useState } from "react";
 
+import { apiBase } from "@/lib/api";
+
 import LoadingOrbit from "./LoadingOrbit";
 
 const dropHints = [
@@ -51,8 +53,7 @@ export default function UploadWizard() {
       const formData = new FormData();
       files.forEach((file) => formData.append("files", file));
 
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
-      const response = await axios.post(`${apiUrl}/api/chapters`, formData, {
+      const response = await axios.post(`${apiBase}/api/chapters`, formData, {
         headers: { "Content-Type": "multipart/form-data" }
       });
 

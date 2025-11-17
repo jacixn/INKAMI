@@ -1,4 +1,9 @@
-const apiBase = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+const defaultApiBase =
+  process.env.NODE_ENV === "production"
+    ? "https://inkami-api.fly.dev"
+    : "http://localhost:8000";
+
+export const apiBase = process.env.NEXT_PUBLIC_API_URL ?? defaultApiBase;
 
 export async function fetcher(path: string, init?: RequestInit) {
   const response = await fetch(`${apiBase}${path}`, {
