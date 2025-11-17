@@ -1,3 +1,5 @@
+from urllib.parse import urlparse
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -6,9 +8,14 @@ from app.core.config import settings
 
 app = FastAPI(title="Inkami API", version="0.1.0")
 
+frontend_url = settings.frontend_url.rstrip("/")
+parsed = urlparse(frontend_url)
+origin = f"{parsed.scheme}://{parsed.netloc}" if parsed.netloc else frontend_url
+allow_origins = {frontend_url, origin}
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[settings.frontend_url],
+    allow_origins=list(allow_origins),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
