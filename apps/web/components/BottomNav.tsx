@@ -1,9 +1,18 @@
 "use client";
 
 import Link from "next/link";
+import type { Route } from "next";
 import { usePathname } from "next/navigation";
 
-type NavHref = string | { pathname: string; query?: Record<string, string> };
+type AppRoute = Route<
+  | "/"
+  | "/upload"
+  | "/reader"
+  | "/chapters"
+  | "/docs"
+>;
+
+type NavHref = AppRoute | { pathname: AppRoute; query?: Record<string, string> };
 
 interface NavItem {
   label: string;
