@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { Suspense, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
 import ProcessingStatus from "@/components/ProcessingStatus";
 
@@ -12,7 +12,7 @@ function getChapterId(value?: string | null): string {
   return trimmed.length > 0 ? trimmed : FALLBACK_CHAPTER_ID;
 }
 
-export default function ChapterStatusPage() {
+function ChapterStatusContent() {
   const searchParams = useSearchParams();
 
   const chapterId = useMemo(() => {
@@ -23,5 +23,19 @@ export default function ChapterStatusPage() {
     <div className="space-y-6">
       <ProcessingStatus chapterId={chapterId} />
     </div>
+  );
+}
+
+export default function ChapterStatusPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="space-y-6">
+          <ProcessingStatus chapterId={FALLBACK_CHAPTER_ID} />
+        </div>
+      }
+    >
+      <ChapterStatusContent />
+    </Suspense>
   );
 }

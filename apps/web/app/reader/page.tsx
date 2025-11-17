@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { Suspense, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
 import VoiceInspector from "@/components/VoiceInspector";
 import { usePlaybackController } from "@/hooks/usePlaybackController";
@@ -14,7 +14,7 @@ function getChapterId(value?: string | null): string {
   return trimmed.length > 0 ? trimmed : FALLBACK_CHAPTER_ID;
 }
 
-export default function ReaderPage() {
+function ReaderPageContent() {
   const searchParams = useSearchParams();
 
   const chapterId = useMemo(() => {
@@ -28,5 +28,19 @@ export default function ReaderPage() {
       <ImmersiveReader controller={controller} />
       <VoiceInspector controller={controller} />
     </div>
+  );
+}
+
+export default function ReaderPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="space-y-6">
+          <p className="text-center text-sm text-white/60">Loading reader…</p>
+        </div>
+      }
+    >
+      <ReaderPageContent />
+    </Suspense>
   );
 }
