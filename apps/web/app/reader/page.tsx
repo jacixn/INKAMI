@@ -1,9 +1,8 @@
 "use client";
 
-import ReaderCanvas from "@/components/ReaderCanvas";
 import VoiceInspector from "@/components/VoiceInspector";
 import { usePlaybackController } from "@/hooks/usePlaybackController";
-import PlaybackControls from "@/components/PlaybackControls";
+import ImmersiveReader from "@/components/ImmersiveReader";
 
 const FALLBACK_CHAPTER_ID = "demo";
 
@@ -25,11 +24,8 @@ export default function ReaderPage({ searchParams }: ReaderPageProps) {
   const controller = usePlaybackController(chapterId);
 
   return (
-    <div className="grid gap-6 md:grid-cols-[2fr,1fr]">
-      <div className="space-y-4">
-        <ReaderCanvas controller={controller} />
-        <PlaybackControls controller={controller} />
-      </div>
+    <div className="space-y-6">
+      <ImmersiveReader controller={controller} />
       <VoiceInspector controller={controller} />
     </div>
   );

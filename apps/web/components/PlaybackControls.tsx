@@ -1,40 +1,77 @@
 "use client";
 
+import { cn } from "@/lib/utils";
 import type { PlaybackController } from "@/lib/types";
 
 interface Props {
   controller: PlaybackController;
+  variant?: "card" | "overlay";
 }
 
-export default function PlaybackControls({ controller }: Props) {
+export default function PlaybackControls({ controller, variant = "card" }: Props) {
+  const wrapperClass =
+    variant === "overlay"
+      ? "rounded-[32px] border border-white/10 bg-black/70 px-5 py-4 flex flex-col gap-4 backdrop-blur-xl"
+      : "card flex flex-col gap-4 md:flex-row md:items-center md:justify-between";
+
+  const buttonClass = cn(
+    "flex h-12 w-12 items-center justify-center rounded-full border border-white/20 text-white transition hover:border-white/50",
+    variant === "overlay" && "bg-white/5"
+  );
+
   return (
-    <section className="card flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+    <section className={wrapperClass}>
       <div className="flex items-center gap-3">
         <button
           type="button"
           onClick={controller.prevBubble}
-          className="rounded-full border border-white/20 px-3 py-2 text-xs uppercase tracking-[0.2em]"
+          className={buttonClass}
+          aria-label="Previous bubble"
         >
-          Prev
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+            <path
+              d="M10.8 5.25 7.2 9l3.6 3.75"
+              stroke="currentColor"
+              strokeWidth="1.6"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
         </button>
         <button
           type="button"
           onClick={controller.isPlaying ? controller.pause : controller.play}
-          className="rounded-full bg-white px-6 py-2 text-sm font-semibold text-black"
+          className={cn(
+            "rounded-full px-6 py-3 text-sm font-semibold transition",
+            controller.isPlaying
+              ? "bg-white/80 text-black"
+              : "bg-white text-black hover:bg-ink-100"
+          )}
         >
           {controller.isPlaying ? "Pause" : "Play"}
         </button>
         <button
           type="button"
           onClick={controller.nextBubble}
-          className="rounded-full border border-white/20 px-3 py-2 text-xs uppercase tracking-[0.2em]"
+          className={buttonClass}
+          aria-label="Next bubble"
         >
-          Next
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+            <path
+              d="M7.2 12.75 10.8 9 7.2 5.25"
+              stroke="currentColor"
+              strokeWidth="1.6"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
         </button>
       </div>
 
       <div className="flex flex-1 flex-col gap-2">
-        <label className="text-xs uppercase text-ink-200">Speed</label>
+        <label className="text-xs uppercase tracking-[0.4em] text-white/60">
+          Speed
+        </label>
         <input
           type="range"
           min="0.8"
@@ -42,6 +79,7 @@ export default function PlaybackControls({ controller }: Props) {
           step="0.1"
           value={controller.speed}
           onChange={(event) => controller.setSpeed(Number(event.target.value))}
+          className="accent-white"
         />
       </div>
     </section>

@@ -6,38 +6,52 @@ import { cn } from "@/lib/utils";
 
 interface Props {
   controller: PlaybackController & { loading: boolean };
+  variant?: "default" | "immersive";
 }
 
-export default function ReaderCanvas({ controller }: Props) {
+export default function ReaderCanvas({ controller, variant = "default" }: Props) {
   const page = controller.pages[controller.currentPageIndex];
+  const immersive = variant === "immersive";
 
   if (!page) {
     return (
-      <section className="card h-[600px] items-center justify-center text-center text-ink-100">
+      <section
+        className={cn(
+          "h-[600px] items-center justify-center text-center text-ink-100",
+          immersive ? "rounded-[32px] border border-white/10 bg-black/30" : "card"
+        )}
+      >
         {controller.loading ? "Loading chapter..." : "No pages loaded yet."}
       </section>
     );
   }
 
   return (
-    <section className="card">
-      <header className="mb-4 flex items-center gap-4 text-sm text-ink-100">
-        <span>Page {page.page_index + 1}</span>
-        <div className="flex gap-2">
-          {controller.pages.map((_, index) => (
-            <button
-              key={index}
-              className={cn(
-                "h-2 w-6 rounded-full bg-white/10 transition",
-                index === controller.currentPageIndex && "bg-white"
-              )}
-              onClick={() => controller.selectPage(index)}
-              aria-label={`Go to page ${index + 1}`}
-            />
-          ))}
-        </div>
-      </header>
-      <div className="relative mx-auto aspect-[9/16] w-full max-w-[520px] overflow-hidden rounded-xl bg-black/60">
+    <section className={cn(immersive ? "" : "card")}>
+      {!immersive && (
+        <header className="mb-4 flex items-center gap-4 text-sm text-ink-100">
+          <span>Page {page.page_index + 1}</span>
+          <div className="flex gap-2">
+            {controller.pages.map((_, index) => (
+              <button
+                key={index}
+                className={cn(
+                  "h-2 w-6 rounded-full bg-white/10 transition",
+                  index === controller.currentPageIndex && "bg-white"
+                )}
+                onClick={() => controller.selectPage(index)}
+                aria-label={`Go to page ${index + 1}`}
+              />
+            ))}
+          </div>
+        </header>
+      )}
+      <div
+        className={cn(
+          "relative mx-auto aspect-[9/16] w-full overflow-hidden rounded-[28px] border border-white/10 bg-black/60",
+          immersive ? "max-w-[720px]" : "max-w-[520px]"
+        )}
+      >
         <Image
           src={page.image_url}
           alt={`Page ${page.page_index + 1}`}
