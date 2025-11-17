@@ -23,15 +23,20 @@ redis = "^5.0.8"
 rq = "^1.16.2"
 boto3 = "^1.35.23"
 numpy = "^1.26.4"
-opencv-python-headless = "^4.10.0"
-torch = "^2.4.0"
-ultralytics = "^8.3.6"
-paddleocr = "^2.7.3"
 Pillow = "^10.4.0"
 tenacity = "^8.4.2"
 elevenlabs = "^1.8.1"
 azure-cognitiveservices-speech = "^1.37.0"
 google-cloud-texttospeech = "^2.16.3"
+
+[tool.poetry.group.vision]
+optional = true
+
+[tool.poetry.group.vision.dependencies]
+opencv-python-headless = "^4.10.0"
+torch = "^2.4.0"
+ultralytics = "^8.3.6"
+paddleocr = "^2.7.3"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.3.2"
