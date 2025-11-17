@@ -1,11 +1,13 @@
 "use client";
 
-import Link, { type LinkProps } from "next/link";
+import Link from "next/link";
 import { usePathname } from "next/navigation";
+
+type NavHref = string | { pathname: string; query?: Record<string, string> };
 
 interface NavItem {
   label: string;
-  href: LinkProps["href"];
+  href: NavHref;
   icon: (active: boolean) => JSX.Element;
 }
 
