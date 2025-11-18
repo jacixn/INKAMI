@@ -279,7 +279,8 @@ class VisionService:
             return []
         
         try:
-            parsed = json.loads(content)
+            normalized = self._strip_code_fences(content)
+            parsed = json.loads(normalized)
             entries = self._extract_entries_from_structure(parsed)
             if entries:
                 return entries
@@ -420,6 +421,17 @@ class VisionService:
         
         line = re.sub(r"\s{2,}", " ", line)
         return line.strip(" ,;:-\"“”'")
+
+    def _strip_code_fences(self, content: str) -> str:
+        stripped = content.strip()
+        if stripped.startswith("```"):
+            lines = stripped.splitlines()
+            if len(lines) >= 2:
+                lines = lines[1:]
+                if lines and lines[-1].strip() == "```":
+                    lines = lines[:-1]
+            stripped = "\n".join(lines).strip()
+        return stripped
 
     def _approximate_bubble_boxes(
         self, count: int, width: int, height: int
