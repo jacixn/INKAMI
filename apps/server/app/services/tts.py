@@ -27,7 +27,7 @@ class TTSService:
         
         # Male voices (child → young → adult)
         "voice_child_m": "FGY2WhTYpPnrIDTdsKH5",  # Daniel - young boy
-        "voice_young_m": "pNInz6obpgDQGcFmaJgB",  # Antoni - energetic young man
+        "voice_young_m": "yoZ06aMxZJJ28mfd3POQ",  # Adam - realistic heroic lead
         "voice_adult_m": "TxGEqnHWrfWFTfGW9XjX",  # Josh - mature deep voice
         
         # Special voices

@@ -27,7 +27,7 @@ const voices = [
     id: "voice_young_m",
     name: "Young Man",
     tone: "Hero/Rival",
-    traits: "Confident, energetic, clear"
+    traits: "Heroic, grounded, cinematic"
   },
   {
     id: "voice_adult_m",
