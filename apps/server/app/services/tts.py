@@ -251,10 +251,7 @@ class TTSService:
                     "content": [{"type": "input_text", "text": text}],
                 },
             ],
-            "response_format": {
-                "type": "audio",
-                "audio": {"voice": voice, "format": "mp3"},
-            },
+            "audio": {"voice": voice, "format": "mp3"},
         }
         last_error: Exception | None = None
         audio_bytes: bytes | None = None
