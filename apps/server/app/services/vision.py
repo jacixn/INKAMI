@@ -74,10 +74,8 @@ class VisionService:
                         "role": "user",
                         "content": [
                             {
-                                "type": "image_url",
-                                "image_url": {
-                                    "url": f"data:image/png;base64,{img_base64}"
-                                }
+                                "type": "image",
+                                "image_url": f"data:image/png;base64,{img_base64}",
                             },
                             {
                                 "type": "text",
@@ -172,10 +170,8 @@ Do NOT add descriptions or commentary—only the raw text content."""
                         "role": "user",
                         "content": [
                             {
-                                "type": "image_url",
-                                "image_url": {
-                                    "url": f"data:image/png;base64,{img_base64}"
-                                }
+                                "type": "image",
+                                "image_url": f"data:image/png;base64,{img_base64}",
                             },
                             {
                                 "type": "text",
@@ -538,10 +534,8 @@ Do NOT add descriptions or commentary—only the raw text content."""
                         "role": "user",
                         "content": [
                             {
-                                "type": "image_url",
-                                "image_url": {
-                                    "url": f"data:image/png;base64,{img_base64}"
-                                }
+                                "type": "image",
+                                "image_url": f"data:image/png;base64,{img_base64}",
                             },
                             {
                                 "type": "text",
