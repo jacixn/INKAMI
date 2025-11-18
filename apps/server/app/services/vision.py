@@ -67,27 +67,20 @@ class VisionService:
                 "Authorization": f"Bearer {settings.deepseek_api_key}",
                 "Content-Type": "application/json",
             }
+            prompt = """You are an expert manga letterer. Decode the base64-encoded PNG below, then:
+1. Find EVERY speech bubble, narration box, and UI panel that contains readable text.
+2. Return the exact text you see for each element in top-to-bottom, left-to-right reading order.
+3. Format the response as either JSON ( [{"text":"..."}, {"text":"..."}] ) or bullet lines starting with TEXT:.
+Do NOT add commentary—only the raw text content.
+
+BASE64_IMAGE:
+"""
             payload = {
                 "model": self.VISION_MODEL,
                 "messages": [
                     {
                         "role": "user",
-                        "content": [
-                            {
-                                "type": "input_image",
-                                "image_url": f"data:image/png;base64,{img_base64}",
-                            },
-                            {
-                                "type": "text",
-                                "text": """You are an expert manga letterer. Look at the ENTIRE page image.
-1. Find EVERY speech bubble, narration box, and UI panel that contains readable text.
-2. Return the exact text you see for each element in top-to-bottom reading order.
-3. Format the response as either:
-   - JSON array: [{"text": "..."}, {"text": "..."}]
-   - or bullet list where each line starts with TEXT:, Bubble:, Panel:, or a number.
-Do NOT add descriptions or commentary—only the raw text content."""
-                            }
-                        ]
+                        "content": prompt + img_base64,
                     }
                 ],
                 "max_tokens": 500,
@@ -163,21 +156,18 @@ Do NOT add descriptions or commentary—only the raw text content."""
                 "Authorization": f"Bearer {settings.deepseek_api_key}",
                 "Content-Type": "application/json",
             }
+            prompt = """You are reading a single cropped speech bubble or UI panel.
+Decode the base64 PNG below and transcribe the text EXACTLY as written (keep punctuation, ellipses, casing).
+Return ONLY the text string, no commentary.
+
+BASE64_IMAGE:
+"""
             payload = {
                 "model": self.VISION_MODEL,
                 "messages": [
                     {
                         "role": "user",
-                        "content": [
-                            {
-                                "type": "input_image",
-                                "image_url": f"data:image/png;base64,{img_base64}",
-                            },
-                            {
-                                "type": "text",
-                                "text": "Read the text in this image. Return ONLY the text you see, exactly as written. Include punctuation like ? and ! Do not add commentary."
-                            }
-                        ]
+                        "content": prompt + img_base64,
                     }
                 ],
                 "max_tokens": 200,
@@ -527,21 +517,17 @@ Do NOT add descriptions or commentary—only the raw text content."""
                 "Authorization": f"Bearer {settings.deepseek_api_key}",
                 "Content-Type": "application/json",
             }
+            prompt = """Decode the base64 PNG bubble below and read ONLY the visible text.
+Return just the text content (single line). If there are multiple lines, separate them with spaces.
+
+BASE64_IMAGE:
+"""
             payload = {
                 "model": self.VISION_MODEL,
                 "messages": [
                     {
                         "role": "user",
-                        "content": [
-                            {
-                                "type": "input_image",
-                                "image_url": f"data:image/png;base64,{img_base64}",
-                            },
-                            {
-                                "type": "text",
-                                "text": "Read ONLY the text visible in this image. Return just the text content, nothing else. If there are multiple lines, separate them with spaces."
-                            }
-                        ]
+                        "content": prompt + img_base64,
                     }
                 ],
                 "max_tokens": 150,
