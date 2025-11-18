@@ -140,6 +140,8 @@ def process_chapter(chapter_id: str, files: list[ChapterFile], job_id: str | Non
             else:
                 detected = [_fallback_bubble(page_width, page_height)]
 
+        print(f"🧠 OCR initial bubbles ({len(detected)}): {[bubble.text for bubble in detected]}")
+
         # Refine each detected bubble text using a targeted OCR pass over its bounds.
         for bubble in detected:
             refined = ocr_service.extract(image_path, bubble.box).strip()
@@ -148,6 +150,8 @@ def process_chapter(chapter_id: str, files: list[ChapterFile], job_id: str | Non
             current = bubble.text.strip()
             if len(refined) > len(current) + 2 or ("?" in refined and "?" not in current):
                 bubble.text = refined
+
+        print(f"🧠 OCR refined bubbles ({len(detected)}): {[bubble.text for bubble in detected]}")
 
         items: list[BubbleItem] = []
         for bubble_idx, bubble in enumerate(detected):
