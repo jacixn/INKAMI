@@ -189,8 +189,21 @@ class OCRService:
             print(f"🔎 Checking for UI keywords in: {panel_text.upper()}")
             # Check if this is likely UI text (contains system keywords OR has junk characters)
             has_ui_keywords = any(keyword in panel_text.upper() for keyword in ui_keywords)
-            # Also accept if it's gibberish (OCR failed on colored background)
-            is_gibberish = any(char in panel_text for char in ["\\", "|"]) or len(panel_text.split()) < 3
+            
+            # Detect gibberish: lots of short words (2 chars or less), or junk ratio > 20%
+            words = panel_text.split()
+            short_words = sum(1 for word in words if len(word.strip(".,;:!?")) <= 2)
+            short_word_ratio = short_words / max(1, len(words))
+            
+            # Count junk characters
+            total_chars = len(panel_text)
+            alpha_chars = sum(1 for char in panel_text if char.isalpha())
+            junk_chars = sum(1 for char in panel_text if not char.isalnum() and char not in " ?!.,;:-'\"")
+            junk_ratio = junk_chars / max(1, total_chars)
+            
+            is_gibberish = short_word_ratio > 0.5 or junk_ratio > 0.2 or any(char in panel_text for char in ["\\", "|", "Ny", "Qe", "Oy", "Ap", "Ay"])
+            
+            print(f"🔎 Analysis: short_word_ratio={short_word_ratio:.2f}, junk_ratio={junk_ratio:.2f}, is_gibberish={is_gibberish}")
             
             if has_ui_keywords or is_gibberish:
                 print(f"✅ Adding panel as UI element (keywords: {has_ui_keywords}, gibberish: {is_gibberish})")

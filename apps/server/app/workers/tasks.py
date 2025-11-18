@@ -46,9 +46,12 @@ def _voice_for_bubble(index: int) -> str:
 
 
 def _normalize_text(text: str) -> str:
+    # Remove OCR artifacts and normalize spacing
     cleaned = text.replace("|", " ")
     cleaned = cleaned.replace("\n", " ")
-    cleaned = re.sub(r"\s+", " ", cleaned)
+    cleaned = cleaned.replace(";", "")  # Remove semicolons (OCR artifacts)
+    cleaned = re.sub(r"^['\"]+|['\"]+$", "", cleaned)  # Remove leading/trailing quotes
+    cleaned = re.sub(r"\s+", " ", cleaned)  # Normalize whitespace
     return cleaned.strip()
 
 
