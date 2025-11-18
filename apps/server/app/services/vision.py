@@ -103,7 +103,8 @@ Do NOT add descriptions or commentary—only the raw text content."""
                 print("⚠️ Vision API returned no results")
                 return []
             
-            content = result["choices"][0]["message"]["content"].strip()
+            raw_content = result["choices"][0]["message"].get("content")
+            content = self._extract_text_content(raw_content)
             print(f"📝 Vision API response:\n{content}")
             
             texts = self._parse_detected_texts(content)
@@ -216,6 +217,31 @@ Do NOT add descriptions or commentary—only the raw text content."""
         
         # Use smart text analysis to determine emotion and voice
         return self._analyze_from_text(text, bubble_box, page_height)
+
+    def _extract_text_content(self, content) -> str:
+        """Normalize DeepSeek message content (string, list, dict) into plain text."""
+        if content is None:
+            return ""
+        if isinstance(content, str):
+            return content.strip()
+        if isinstance(content, list):
+            parts: list[str] = []
+            for entry in content:
+                if isinstance(entry, str):
+                    parts.append(entry)
+                elif isinstance(entry, dict):
+                    entry_type = entry.get("type")
+                    if entry_type == "text" and "text" in entry:
+                        parts.append(str(entry["text"]))
+                    elif "content" in entry:
+                        parts.append(self._extract_text_content(entry["content"]))
+            return "\n".join(part for part in parts if part).strip()
+        if isinstance(content, dict):
+            if "text" in content:
+                return str(content["text"]).strip()
+            if "content" in content:
+                return self._extract_text_content(content["content"])
+        return str(content).strip()
 
     def _parse_detected_texts(self, content: str) -> list[str]:
         """Parse multi-bubble output from the vision API into clean text strings."""
