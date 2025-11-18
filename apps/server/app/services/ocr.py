@@ -28,7 +28,7 @@ class OCRService:
         crop = image.crop((box[0], box[1], box[2], box[3]))
         return pytesseract.image_to_string(crop, config="--psm 6").strip()
 
-    def detect_bubbles(self, image_path: Path, conf_threshold: int = 55) -> List[DetectedBubble]:
+    def detect_bubbles(self, image_path: Path, conf_threshold: int = 45) -> List[DetectedBubble]:
         image = Image.open(image_path).convert("RGB")
         data = pytesseract.image_to_data(image, output_type=Output.DICT)
         groups: dict[tuple[int, int], list[dict[str, int | str]]] = defaultdict(list)

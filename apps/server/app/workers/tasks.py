@@ -105,6 +105,20 @@ def process_chapter(chapter_id: str, files: list[ChapterFile], job_id: str | Non
         image_path = Path(file_info["path"])
 
         detected = ocr_service.detect_bubbles(image_path)
+        # Perform a second pass with a lower threshold to capture UI/system text blocks.
+        if detected:
+            existing = {bubble.text.strip().lower() for bubble in detected if bubble.text}
+        else:
+            existing = set()
+        secondary = ocr_service.detect_bubbles(image_path, conf_threshold=35)
+        for bubble in secondary:
+            normalized = bubble.text.strip().lower()
+            if not normalized:
+                continue
+            if normalized in existing:
+                continue
+            detected.append(bubble)
+            existing.add(normalized)
         if not detected:
             fallback_text = ocr_service.extract(image_path, [0, 0, page_width, page_height])
             if fallback_text.strip():

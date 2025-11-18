@@ -50,6 +50,12 @@ class VisionService:
         emotion = "neutral"
         tone = "normal"
         stability = 0.5
+
+        text_words = [word.strip("?!.,;:") for word in text_lower.split()]
+        alpha_chars = [char for char in text if char.isalpha()]
+        upper_ratio = (
+            sum(1 for char in alpha_chars if char.isupper()) / max(1, len(alpha_chars))
+        )
         
         # Question marks suggest confusion/uncertainty
         if "?" in text:
@@ -78,27 +84,33 @@ class VisionService:
             tone = "contemplative"
             stability = 0.4
         
-        # Detect character type from speech patterns
+        system_keywords = ["you are now", "system", "quest", "mission", "objective", "status"]
+        male_keywords = ["knight", "iron", "blood", "sword", "bro", "dude", "sir", "captain", "hero"]
+        calm_keywords = ["calculate", "observe", "analysis", "strategy", "precisely"]
+        warm_keywords = ["please", "sorry", "hope", "wish", "feel", "thank"]
+
         voice_archetype = "narrator"
-        
-        # Short, questioning text often suggests younger character
-        if len(text) < 100 and "?" in text:
-            voice_archetype = "young_female_warm"
-        # Authoritative statements suggest confident character
-        elif any(word in text_lower for word in ["must", "will", "shall", "command"]):
-            voice_archetype = "male_confident"
-        # Gentle or emotional words suggest warm character
-        elif any(word in text_lower for word in ["please", "sorry", "hope", "wish", "feel"]):
-            voice_archetype = "young_female_warm"
-        # Cool analytical words
-        elif any(word in text_lower for word in ["analyze", "observe", "calculate", "precisely"]):
-            voice_archetype = "young_female_cool"
-        
-        # Position can hint at character type (top = narrator, middle = dialogue)
-        if bubble_box[1] < 200:  # Near top
+        is_system_message = any(keyword in text_lower for keyword in system_keywords) or upper_ratio > 0.85
+
+        if is_system_message:
             voice_archetype = "narrator"
-            stability = 0.6  # More stable for narration
-        
+            stability = max(stability, 0.65)
+        elif any(keyword in text_lower for keyword in male_keywords):
+            voice_archetype = "male_confident" if emotion in {"excited", "assertive"} else "male_stoic"
+        elif any(keyword in text_lower for keyword in calm_keywords):
+            voice_archetype = "young_female_cool"
+        elif any(keyword in text_lower for keyword in warm_keywords):
+            voice_archetype = "young_female_warm"
+        else:
+            # Alternate based on punctuation: questions lean warm heroine, otherwise stoic mentor.
+            voice_archetype = "young_female_warm" if "?" in text else "male_stoic"
+
+        # If the bubble sits in the top ~15% of the page and looks like UI text, treat as narrator/system.
+        page_height = bubble_box[3] if len(bubble_box) > 3 else bubble_box[1] + 100
+        if (bubble_box[1] / max(1, page_height)) <= 0.15 and len(text) > 15:
+            voice_archetype = "narrator"
+            stability = max(stability, 0.6)
+
         voice_id = self.VOICE_MAPPING.get(voice_archetype, "voice_narrator")
         
         print(f"🎭 Text Analysis: {emotion} ({tone}) → {voice_id} [stability: {stability}]")
