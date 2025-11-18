@@ -25,7 +25,7 @@ class Settings(BaseSettings):
     azure_speech_key: str | None = None
     azure_speech_region: str | None = None
     google_application_credentials: str | None = None
-    tts_provider_priority: str = "elevenlabs,deepsick,azure,google"
+    tts_provider_priority: str = "elevenlabs,openai,deepsick,azure,google"
 
 
 @lru_cache(maxsize=1)

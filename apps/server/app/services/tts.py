@@ -55,6 +55,21 @@ class TTSService:
     }
     
     ELEVEN_MODEL = "eleven_multilingual_v2"
+    OPENAI_TTS_MODEL = "gpt-4o-mini-tts"
+
+    OPENAI_VOICE_MAP = {
+        "voice_child_f": "luna",
+        "voice_young_f": "sol",
+        "voice_adult_f": "verse",
+        "voice_child_m": "ember",
+        "voice_young_m": "alloy",
+        "voice_adult_m": "sage",
+        "voice_narrator_f": "verse",
+        "voice_narrator_m": "sage",
+        "voice_narrator": "verse",
+        "voice_system": "ash",
+        "voice_sfx": "ballad",
+    }
 
     VOICE_SETTINGS_OVERRIDES = {
         "voice_narrator_f": {
@@ -113,6 +128,15 @@ class TTSService:
                     return result
                 except Exception as e:
                     print(f"❌ ElevenLabs TTS failed: {type(e).__name__}: {str(e)}")
+                    continue
+            if provider == "openai" and settings.openai_api_key:
+                try:
+                    print("🎤 Attempting OpenAI TTS synthesis...")
+                    result = self._synthesize_openai(text, voice_id)
+                    print(f"✅ OpenAI TTS SUCCESS! Audio URL: {result.audio_url[:100]}")
+                    return result
+                except Exception as e:
+                    print(f"❌ OpenAI TTS failed: {type(e).__name__}: {str(e)}")
                     continue
         print(f"⚠️ All TTS providers failed, using fallback for: {text[:50]}...")
         return self._fallback_tts(text, voice_id)
@@ -174,6 +198,37 @@ class TTSService:
             raise exc
         audio_bytes = response.content
         key = f"tts/{voice_id}/{uuid4().hex}.mp3"
+        audio_url = storage_client.put_bytes(key, audio_bytes, "audio/mpeg")
+        return TTSResult(audio_url=audio_url, word_times=self._approximate_word_times(text))
+
+    def _synthesize_openai(self, text: str, voice_id: str) -> TTSResult:
+        api_key = (settings.openai_api_key or "").strip()
+        if not api_key:
+            raise RuntimeError("OpenAI API key missing")
+        voice = self.OPENAI_VOICE_MAP.get(voice_id, "alloy")
+        url = "https://api.openai.com/v1/audio/speech"
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "model": self.OPENAI_TTS_MODEL,
+            "voice": voice,
+            "input": text,
+            "format": "mp3",
+        }
+        response = requests.post(url, headers=headers, json=payload, timeout=60)
+        try:
+            response.raise_for_status()
+        except requests.HTTPError as exc:
+            body = response.text if response is not None else ""
+            print(
+                f"❌ OpenAI HTTPError "
+                f"{response.status_code if response else '??'}: {body[:500]}"
+            )
+            raise exc
+        audio_bytes = response.content
+        key = f"tts_openai/{voice_id}/{uuid4().hex}.mp3"
         audio_url = storage_client.put_bytes(key, audio_bytes, "audio/mpeg")
         return TTSResult(audio_url=audio_url, word_times=self._approximate_word_times(text))
 
