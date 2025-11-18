@@ -10,12 +10,14 @@ interface Props {
 }
 
 const voiceOptions = [
-  { id: "voice_narrator", label: "Narrator • Neutral" },
-  { id: "voice_friendly_f", label: "Heroine • Warm" },
-  { id: "voice_cool_f", label: "Strategist • Calm" },
-  { id: "voice_brash_m", label: "Rival • Bold" },
-  { id: "voice_stoic_m", label: "Mentor • Stoic" },
-  { id: "voice_androgynous", label: "Mystic • Androgynous" }
+  { id: "voice_child_f", label: "Young Girl • Child" },
+  { id: "voice_young_f", label: "Young Woman • Heroine" },
+  { id: "voice_adult_f", label: "Mature Woman • Wise" },
+  { id: "voice_child_m", label: "Young Boy • Child" },
+  { id: "voice_young_m", label: "Young Man • Hero" },
+  { id: "voice_adult_m", label: "Mature Man • Warrior" },
+  { id: "voice_narrator", label: "Narrator • Story" },
+  { id: "voice_system", label: "System Voice • UI" }
 ];
 
 export default function VoiceInspector({ controller }: Props) {

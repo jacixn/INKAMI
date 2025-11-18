@@ -1,39 +1,51 @@
 const voices = [
   {
-    id: "voice_narrator",
-    name: "Oracle",
-    tone: "Cinematic narrator",
-    traits: "Low, resonant, widescreen"
+    id: "voice_child_f",
+    name: "Young Girl",
+    tone: "Child character",
+    traits: "Bright, innocent, energetic"
   },
   {
-    id: "voice_friendly_f",
-    name: "Lumen",
+    id: "voice_young_f",
+    name: "Young Woman",
     tone: "Heroine lead",
-    traits: "Warm, quick, resolute"
+    traits: "Warm, expressive, clear"
   },
   {
-    id: "voice_cool_f",
-    name: "Serein",
-    tone: "Strategist",
-    traits: "Calm, articulate, airy"
+    id: "voice_adult_f",
+    name: "Mature Woman",
+    tone: "Wise character",
+    traits: "Calm, sophisticated, rich"
   },
   {
-    id: "voice_brash_m",
-    name: "Kaze",
-    tone: "Rival",
-    traits: "Confident, bright mid"
+    id: "voice_child_m",
+    name: "Young Boy",
+    tone: "Child character",
+    traits: "Youthful, playful, light"
   },
   {
-    id: "voice_stoic_m",
-    name: "Obsidian",
-    tone: "Mentor",
-    traits: "Stoic, measured, smoky"
+    id: "voice_young_m",
+    name: "Young Man",
+    tone: "Hero/Rival",
+    traits: "Confident, energetic, clear"
   },
   {
-    id: "voice_androgynous",
-    name: "Myrrh",
-    tone: "Mystic",
-    traits: "Fluid, whisper-loud"
+    id: "voice_adult_m",
+    name: "Mature Man",
+    tone: "Mentor/Warrior",
+    traits: "Deep, stoic, authoritative"
+  },
+  {
+    id: "voice_narrator",
+    name: "Narrator",
+    tone: "Story voice",
+    traits: "Clear, neutral, professional"
+  },
+  {
+    id: "voice_system",
+    name: "System Voice",
+    tone: "UI/System",
+    traits: "Neutral, precise, informative"
   }
 ];
 

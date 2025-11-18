@@ -20,13 +20,32 @@ class TTSResult:
 
 class TTSService:
     ELEVEN_VOICE_MAP = {
-        "voice_friendly_f": "21m00Tcm4TlvDq8ikWAM",  # Rachel
-        "voice_cool_f": "AZnzlk1XvdvUeBnXmlld",  # Bella
-        "voice_brash_m": "pNInz6obpgDQGcFmaJgB",  # Antoni
-        "voice_stoic_m": "TxGEqnHWrfWFTfGW9XjX",  # Josh
-        "voice_androgynous": "ErXwobaYiN019PkySvjV",  # Domi
-        "voice_narrator": "EXAVITQu4vr4xnSDxMaL",  # Sarah
+        # Female voices (child → young → adult)
+        "voice_child_f": "jBpfuIE2acCO8z3wKNLl",  # Charlotte - child/young girl
+        "voice_young_f": "21m00Tcm4TlvDq8ikWAM",  # Rachel - friendly young woman
+        "voice_adult_f": "AZnzlk1XvdvUeBnXmlld",  # Bella - mature woman
+        
+        # Male voices (child → young → adult)
+        "voice_child_m": "FGY2WhTYpPnrIDTdsKH5",  # Daniel - young boy
+        "voice_young_m": "pNInz6obpgDQGcFmaJgB",  # Antoni - energetic young man
+        "voice_adult_m": "TxGEqnHWrfWFTfGW9XjX",  # Josh - mature deep voice
+        
+        # Special voices
+        "voice_narrator": "EXAVITQu4vr4xnSDxMaL",  # Sarah - clear narrator
+        "voice_system": "ErXwobaYiN019PkySvjV",  # Domi - neutral system voice
     }
+    
+    VOICE_DISPLAY_NAMES = {
+        "voice_child_f": "Young Girl",
+        "voice_young_f": "Young Woman",
+        "voice_adult_f": "Mature Woman",
+        "voice_child_m": "Young Boy",
+        "voice_young_m": "Young Man",
+        "voice_adult_m": "Mature Man",
+        "voice_narrator": "Narrator",
+        "voice_system": "System Voice",
+    }
+    
     ELEVEN_MODEL = "eleven_multilingual_v2"
 
     def synthesize(self, text: str, voice_id: str, stability: float = 0.5, similarity_boost: float = 0.75) -> TTSResult:

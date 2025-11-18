@@ -37,6 +37,13 @@ async def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
+@app.get("/api/voices", tags=["meta"])
+async def get_voices() -> dict[str, str]:
+    """Get available voice IDs and their display names."""
+    from app.services.tts import tts_service
+    return tts_service.VOICE_DISPLAY_NAMES
+
+
 app.include_router(chapters.router, prefix="/api/chapters", tags=["chapters"])
 app.include_router(jobs.router, prefix="/api/jobs", tags=["jobs"])
 app.include_router(bubbles.router, prefix="/api/bubbles", tags=["bubbles"])

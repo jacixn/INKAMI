@@ -26,12 +26,19 @@ class VisionService:
     """Service for analyzing manga/manhwa images with AI vision."""
 
     VOICE_MAPPING = {
-        "young_female_warm": "voice_friendly_f",
-        "young_female_cool": "voice_cool_f",
-        "male_confident": "voice_brash_m",
-        "male_stoic": "voice_stoic_m",
-        "androgynous_mysterious": "voice_androgynous",
+        # Female character archetypes
+        "child_female": "voice_child_f",
+        "young_female": "voice_young_f",
+        "adult_female": "voice_adult_f",
+        
+        # Male character archetypes
+        "child_male": "voice_child_m",
+        "young_male": "voice_young_m",
+        "adult_male": "voice_adult_m",
+        
+        # Special
         "narrator": "voice_narrator",
+        "system": "voice_system",
     }
 
     def analyze_bubble(
@@ -99,39 +106,60 @@ class VisionService:
             tone = "contemplative"
             stability = 0.4
         
+        # Keyword patterns for voice selection
         system_keywords = ["you are now", "system", "quest", "mission", "objective", "status"]
-        male_keywords = ["knight", "iron", "blood", "sword", "bro", "dude", "sir", "captain", "hero"]
-        calm_keywords = ["calculate", "observe", "analysis", "strategy", "precisely"]
-        warm_keywords = ["please", "sorry", "hope", "wish", "feel", "thank"]
+        warrior_keywords = ["knight", "iron", "blood", "sword", "battle", "fight", "warrior", "soldier"]
+        adult_male_keywords = ["sir", "captain", "commander", "master", "lord", "king"]
+        young_male_keywords = ["bro", "dude", "hey", "yeah", "whoa"]
+        child_keywords = ["mom", "mommy", "dad", "daddy", "scared", "wanna", "gonna"]
+        elegant_keywords = ["grace", "beauty", "elegant", "lovely", "delicate"]
+        wise_keywords = ["ancient", "wisdom", "elder", "sage", "experience"]
 
         voice_archetype = "narrator"
-        # Check for system messages - but male keywords override system detection
-        has_system_keywords = any(keyword in text_lower for keyword in system_keywords)
-        has_male_keywords = any(keyword in text_lower for keyword in male_keywords)
         
-        # All-caps dialogue is common in manga, so check for actual system keywords
-        is_system_message = has_system_keywords or (upper_ratio > 0.85 and not has_male_keywords and len(text) < 50)
+        # Check for system messages
+        has_system_keywords = any(keyword in text_lower for keyword in system_keywords)
+        has_warrior_keywords = any(keyword in text_lower for keyword in warrior_keywords)
+        has_child_keywords = any(keyword in text_lower for keyword in child_keywords)
+        
+        # All-caps dialogue is common in manga, so only treat as system if it has system keywords
+        is_system_message = has_system_keywords and not has_warrior_keywords
 
-        if has_male_keywords:
-            # Male character dialogue takes priority
-            # Use male_stoic for questioning/thoughtful, male_confident for assertions
-            voice_archetype = "male_stoic" if emotion in {"thoughtful", "confused"} else "male_confident"
-        elif is_system_message:
-            voice_archetype = "narrator"
+        # Determine age group and gender
+        if is_system_message:
+            voice_archetype = "system"
             stability = max(stability, 0.65)
-        elif any(keyword in text_lower for keyword in calm_keywords):
-            voice_archetype = "young_female_cool"
-        elif any(keyword in text_lower for keyword in warm_keywords):
-            voice_archetype = "young_female_warm"
+        elif has_child_keywords:
+            # Child voice - determine gender from other context
+            if any(keyword in text_lower for keyword in ["boy", "son", "he", "him", "his"]):
+                voice_archetype = "child_male"
+            else:
+                voice_archetype = "child_female"
+            stability = 0.35  # Children are more expressive
+        elif has_warrior_keywords or any(keyword in text_lower for keyword in adult_male_keywords):
+            # Adult male voice for warriors/authority figures
+            voice_archetype = "adult_male"
+        elif any(keyword in text_lower for keyword in young_male_keywords):
+            # Young male voice
+            voice_archetype = "young_male"
+        elif any(keyword in text_lower for keyword in wise_keywords + elegant_keywords):
+            # Mature female voice for wise/elegant characters
+            voice_archetype = "adult_female"
+        elif len(text) < 30 and "?" in text:
+            # Short questions often from younger characters
+            voice_archetype = "young_female"
         else:
-            # Alternate based on punctuation: questions lean warm heroine, otherwise stoic mentor.
-            voice_archetype = "young_female_warm" if "?" in text else "male_stoic"
+            # Default to young adult based on emotion
+            if emotion in {"excited", "assertive"}:
+                voice_archetype = "young_male"
+            else:
+                voice_archetype = "young_female"
 
-        # If the bubble sits in the top ~15% of the page and looks like UI text, treat as narrator/system.
+        # If the bubble sits in the top ~15% of the page and looks like UI text, treat as system
         effective_height = page_height if page_height and page_height > 0 else (bubble_box[3] if len(bubble_box) > 3 else bubble_box[1] + 100)
         top_ratio = bubble_box[1] / max(1.0, effective_height)
-        if top_ratio <= 0.15 and len(text) > 15:
-            voice_archetype = "narrator"
+        if top_ratio <= 0.15 and len(text) > 15 and not has_warrior_keywords:
+            voice_archetype = "system"
             stability = max(stability, 0.6)
 
         voice_id = self.VOICE_MAPPING.get(voice_archetype, "voice_narrator")

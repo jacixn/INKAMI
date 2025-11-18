@@ -24,8 +24,8 @@ const demoChapter: ChapterPayload = {
           bubble_box: [140, 260, 640, 560],
           type: "dialogue",
           speaker_id: "heroine",
-          speaker_name: "Lumen",
-          voice_id: "voice_friendly_f",
+          speaker_name: "Young Woman",
+          voice_id: "voice_young_f",
           text: "We turned this entire chapter into audio in under one minute.",
           audio_url:
             "https://cdn.pixabay.com/download/audio/2022/03/12/audio_263318cc46.mp3?filename=glow-ambient-11046.mp3",
@@ -49,7 +49,7 @@ const demoChapter: ChapterPayload = {
           bubble_box: [420, 780, 920, 1040],
           type: "narration",
           speaker_id: "narrator",
-          speaker_name: "Oracle",
+          speaker_name: "Narrator",
           voice_id: "voice_narrator",
           text: "Inkami understands panels, characters, and emotion to pick the right voice.",
           audio_url:
@@ -82,8 +82,8 @@ const demoChapter: ChapterPayload = {
           bubble_box: [160, 360, 620, 580],
           type: "dialogue",
           speaker_id: "rival",
-          speaker_name: "Kaze",
-          voice_id: "voice_brash_m",
+          speaker_name: "Young Man",
+          voice_id: "voice_young_m",
           text: "Tap any bubble and I will replay it instantly.",
           audio_url:
             "https://cdn.pixabay.com/download/audio/2021/08/08/audio_64cc85ee06.mp3?filename=futuristic-beat-9736.mp3",
@@ -105,7 +105,7 @@ const demoChapter: ChapterPayload = {
           bubble_box: [440, 880, 900, 1140],
           type: "narration",
           speaker_id: "narrator",
-          speaker_name: "Oracle",
+          speaker_name: "Narrator",
           voice_id: "voice_narrator",
           text: "Karaoke-style highlights stay synced with the audio stream.",
           audio_url:
