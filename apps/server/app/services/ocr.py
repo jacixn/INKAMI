@@ -30,7 +30,8 @@ class OCRService:
 
     def detect_bubbles(self, image_path: Path, conf_threshold: int = 45) -> List[DetectedBubble]:
         image = Image.open(image_path).convert("RGB")
-        data = pytesseract.image_to_data(image, output_type=Output.DICT)
+        # Use PSM 11 for sparse text detection to better separate regions
+        data = pytesseract.image_to_data(image, output_type=Output.DICT, config="--psm 11")
         groups: dict[tuple[int, int], list[dict[str, int | str]]] = defaultdict(list)
         count = len(data["text"])
         for idx in range(count):
@@ -79,6 +80,40 @@ class OCRService:
 
         bubbles.sort(key=lambda bubble: (bubble.box[1], bubble.box[0]))
         return bubbles
+
+    def detect_ui_elements(self, image_path: Path) -> List[DetectedBubble]:
+        """Detect UI/system text elements that might be missed by regular bubble detection."""
+        image = Image.open(image_path).convert("RGB")
+        width, height = image.size
+        ui_bubbles: List[DetectedBubble] = []
+        
+        # Check bottom region for UI text (bottom 20% of image)
+        bottom_region = (0, int(height * 0.8), width, height)
+        bottom_text = self.extract(image_path, bottom_region).strip()
+        if bottom_text and len(bottom_text) > 5:
+            ui_bubbles.append(
+                DetectedBubble(
+                    bubble_id="ui_bottom",
+                    box=list(bottom_region),
+                    text=bottom_text,
+                    kind="narration",
+                )
+            )
+        
+        # Check top region for UI text (top 20% of image) 
+        top_region = (0, 0, width, int(height * 0.2))
+        top_text = self.extract(image_path, top_region).strip()
+        if top_text and len(top_text) > 5:
+            ui_bubbles.append(
+                DetectedBubble(
+                    bubble_id="ui_top",
+                    box=list(top_region),
+                    text=top_text,
+                    kind="narration",
+                )
+            )
+        
+        return ui_bubbles
 
 
 ocr_service = OCRService()

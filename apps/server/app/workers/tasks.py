@@ -153,6 +153,22 @@ def process_chapter(chapter_id: str, files: list[ChapterFile], job_id: str | Non
 
         print(f"🧠 OCR refined bubbles ({len(detected)}): {[bubble.text for bubble in detected]}")
 
+        # Try to detect UI elements that might have been missed
+        ui_elements = ocr_service.detect_ui_elements(image_path)
+        if ui_elements:
+            # Filter out UI elements that overlap with already detected bubbles
+            for ui_elem in ui_elements:
+                overlaps = False
+                ui_text_lower = ui_elem.text.lower()
+                for bubble in detected:
+                    # Check if the UI text is already included in a detected bubble
+                    if any(word in bubble.text.lower() for word in ui_text_lower.split() if len(word) > 3):
+                        overlaps = True
+                        break
+                if not overlaps:
+                    detected.append(ui_elem)
+            print(f"🧠 OCR with UI elements ({len(detected)}): {[bubble.text for bubble in detected]}")
+
         items: list[BubbleItem] = []
         for bubble_idx, bubble in enumerate(detected):
             items.append(

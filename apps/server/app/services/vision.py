@@ -105,13 +105,19 @@ class VisionService:
         warm_keywords = ["please", "sorry", "hope", "wish", "feel", "thank"]
 
         voice_archetype = "narrator"
-        is_system_message = any(keyword in text_lower for keyword in system_keywords) or upper_ratio > 0.85
+        # Check for system messages - but male keywords override system detection
+        has_system_keywords = any(keyword in text_lower for keyword in system_keywords)
+        has_male_keywords = any(keyword in text_lower for keyword in male_keywords)
+        
+        # All-caps dialogue is common in manga, so check for actual system keywords
+        is_system_message = has_system_keywords or (upper_ratio > 0.85 and not has_male_keywords and len(text) < 50)
 
-        if is_system_message:
+        if has_male_keywords:
+            # Male character dialogue takes priority
+            voice_archetype = "male_confident" if emotion in {"excited", "assertive"} else "male_stoic"
+        elif is_system_message:
             voice_archetype = "narrator"
             stability = max(stability, 0.65)
-        elif any(keyword in text_lower for keyword in male_keywords):
-            voice_archetype = "male_confident" if emotion in {"excited", "assertive"} else "male_stoic"
         elif any(keyword in text_lower for keyword in calm_keywords):
             voice_archetype = "young_female_cool"
         elif any(keyword in text_lower for keyword in warm_keywords):
