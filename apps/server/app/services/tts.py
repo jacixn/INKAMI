@@ -137,11 +137,14 @@ class TTSService:
     ) -> TTSResult:
         resolved_voice = self.ELEVEN_VOICE_MAP.get(voice_id, self.ELEVEN_VOICE_MAP["voice_narrator_f"])
         url = f"https://api.elevenlabs.io/v1/text-to-speech/{resolved_voice}"
+        api_key = (settings.elevenlabs_api_key or "").strip()
         headers = {
-            "xi-api-key": settings.elevenlabs_api_key or "",
+            "xi-api-key": api_key,
             "Accept": "audio/mpeg",
             "Content-Type": "application/json",
         }
+        if not api_key:
+            raise RuntimeError("ElevenLabs API key missing")
         voice_settings = {
             "stability": stability,
             "similarity_boost": similarity_boost,
@@ -160,7 +163,15 @@ class TTSService:
             "voice_settings": voice_settings,
         }
         response = requests.post(url, headers=headers, json=payload, timeout=60)
-        response.raise_for_status()
+        try:
+            response.raise_for_status()
+        except requests.HTTPError as exc:
+            body = response.text if response is not None else ""
+            print(
+                f"❌ ElevenLabs HTTPError "
+                f"{response.status_code if response else '??'}: {body[:500]}"
+            )
+            raise exc
         audio_bytes = response.content
         key = f"tts/{voice_id}/{uuid4().hex}.mp3"
         audio_url = storage_client.put_bytes(key, audio_bytes, "audio/mpeg")

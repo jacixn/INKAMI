@@ -4,6 +4,7 @@ import base64
 import io
 import json
 import re
+import time
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -865,17 +866,39 @@ class VisionService:
             ],
             "max_output_tokens": max_tokens,
         }
-        
-        response = requests.post(self.OPENAI_URL, headers=headers, json=payload, timeout=60)
-        try:
-            response.raise_for_status()
-        except requests.HTTPError as exc:
-            body = response.text if response is not None else ""
-            print(f"❌ Vision HTTPError {response.status_code if response else '??'}: {body[:500]}")
-            raise exc
-        
-        data = response.json()
-        return self._extract_openai_output(data)
+
+        last_error: Exception | None = None
+        for attempt in range(4):
+            response = requests.post(
+                self.OPENAI_URL, headers=headers, json=payload, timeout=60
+            )
+            if response.status_code == 429:
+                wait_time = 0.75 * (attempt + 1)
+                print(
+                    f"⚠️ Vision API rate limited (attempt {attempt + 1}/4). "
+                    f"Retrying in {wait_time:.2f}s..."
+                )
+                time.sleep(wait_time)
+                last_error = requests.HTTPError(response.text, response=response)
+                continue
+
+            try:
+                response.raise_for_status()
+            except requests.HTTPError as exc:
+                body = response.text if response is not None else ""
+                print(
+                    f"❌ Vision HTTPError "
+                    f"{response.status_code if response else '??'}: {body[:500]}"
+                )
+                last_error = exc
+                break
+
+            data = response.json()
+            return self._extract_openai_output(data)
+
+        if last_error:
+            raise last_error
+        return ""
 
     def _extract_openai_output(self, payload: dict) -> str:
         if not payload:
