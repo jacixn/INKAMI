@@ -209,7 +209,7 @@ export function usePlaybackController(chapterId: string): ControllerState {
       cancelSpeech();
 
       const shouldUseSpeech =
-        (!target.bubble.audio_url || target.bubble.audio_url.trim() === "" || target.bubble.audio_url.startsWith("data:audio")) &&
+        (!target.bubble.audio_url || target.bubble.audio_url.trim() === "") &&
         typeof window !== "undefined" &&
         "speechSynthesis" in window;
 
