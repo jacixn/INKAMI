@@ -51,7 +51,7 @@ class TTSService:
     }
     
     ELEVEN_MODEL = "eleven_multilingual_v2"
-    
+
     VOICE_SETTINGS_OVERRIDES = {
         "voice_system": {
             "stability": 0.92,
@@ -147,7 +147,13 @@ class TTSService:
             "voice_settings": voice_settings,
         }
         response = requests.post(url, headers=headers, json=payload, timeout=60)
-        response.raise_for_status()
+        if response.status_code >= 400:
+            snippet = response.text[:500] if response.text else "No response body"
+            print(
+                f"🚨 ElevenLabs error for voice {voice_id} ({resolved_voice}): "
+                f"status={response.status_code} body={snippet}"
+            )
+            response.raise_for_status()
         audio_bytes = response.content
         key = f"tts/{voice_id}/{uuid4().hex}.mp3"
         audio_url = storage_client.put_bytes(key, audio_bytes, "audio/mpeg")
