@@ -120,6 +120,9 @@ class TTSService:
         style: float | None = None,
     ) -> TTSResult:
         resolved_voice = self.ELEVEN_VOICE_MAP.get(voice_id, self.ELEVEN_VOICE_MAP["voice_narrator"])
+        print(f"🎯 Voice mapping: {voice_id} → ElevenLabs ID: {resolved_voice}")
+        if voice_id in {"voice_narrator", "voice_narrator_male"}:
+            print(f"📢 NARRATOR VOICE: {voice_id} = {resolved_voice}")
         url = f"https://api.elevenlabs.io/v1/text-to-speech/{resolved_voice}"
         headers = {
             "xi-api-key": settings.elevenlabs_api_key or "",

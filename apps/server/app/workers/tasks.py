@@ -133,6 +133,7 @@ def process_chapter(
             if processing_mode == "narrate":
                 # Use male or female narrator voice based on user selection
                 assigned_voice = "voice_narrator_male" if narrator_gender == "male" else "voice_narrator"
+                print(f"🎙️ NARRATE MODE: narrator_gender={narrator_gender}, assigned_voice={assigned_voice}")
                 stability = 0.7
                 similarity_boost = 0.85
                 speaker_label = "Narrator"
