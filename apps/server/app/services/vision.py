@@ -26,7 +26,7 @@ class VisionService:
     """Service for analyzing manga/manhwa images with AI vision."""
 
     CHAT_URL = "https://api.deepseek.com/v1/chat/completions"
-    VISION_MODEL = "deepseek-vision"
+    VISION_MODEL = "deepseek-vl"
 
     VOICE_MAPPING = {
         # Female character archetypes
