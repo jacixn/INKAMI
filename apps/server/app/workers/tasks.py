@@ -96,6 +96,31 @@ def _build_tone_hint(text: str, analysis: CharacterAnalysis) -> str | None:
     return " ".join(hints)
 
 
+def _build_tts_delivery_text(text: str, analysis: CharacterAnalysis) -> str:
+    """Lightly tweak punctuation so OpenAI leans into the intent."""
+    trimmed = text.strip()
+    emphasized = trimmed
+
+    if trimmed.endswith("?"):
+        emphasized = trimmed + "?"
+    elif trimmed.endswith(("!", "!!")):
+        emphasized = trimmed + "!"
+    elif trimmed.endswith(("...", "…")):
+        emphasized = trimmed + " ..."
+    else:
+        tone = (analysis.tone or "").lower()
+        emotion = (analysis.emotion or "").lower()
+        if tone in {"questioning", "curious"} and not trimmed.endswith("?"):
+            emphasized = trimmed + "?"
+        elif tone in {"dramatic", "excited"} or emotion in {"angry", "excited"}:
+            if not trimmed.endswith(("!", "!!")):
+                emphasized = trimmed + "!"
+        elif tone in {"sad", "hesitant"} and not trimmed.endswith(("...", "…")):
+            emphasized = trimmed + "..."
+
+    return emphasized
+
+
 def _bubble_kind_from_analysis(analysis: CharacterAnalysis) -> str:
     descriptor = (analysis.character_type or "").lower()
     if any(keyword in descriptor for keyword in ("system", "ui", "computer", "panel")):
@@ -207,8 +232,9 @@ def process_chapter(
             else:
                 # Generate TTS with emotion parameters
                 tone_hint = _build_tone_hint(normalized_text, analysis)
+                delivery_text = _build_tts_delivery_text(normalized_text, analysis)
                 tts_result = tts_service.synthesize(
-                    normalized_text,
+                    delivery_text,
                     assigned_voice,
                     stability=stability,
                     similarity_boost=similarity_boost,
