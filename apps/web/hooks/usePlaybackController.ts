@@ -5,7 +5,7 @@ import useSWR from "swr";
 import { fetcher } from "@/lib/api";
 import type { BubbleItem, ChapterPayload, PlaybackController } from "@/lib/types";
 
-const NEXT_BUBBLE_DELAY_MS = 500;
+const NEXT_BUBBLE_DELAY_MS = 900;
 
 const demoChapter: ChapterPayload = {
   chapter_id: "demo",

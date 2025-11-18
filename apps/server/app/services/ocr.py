@@ -4,11 +4,22 @@ from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 import re
-from typing import List, Sequence
+from typing import List, Sequence, Tuple
 
+import numpy as np
 from PIL import Image, ImageEnhance, ImageOps
 import pytesseract
 from pytesseract import Output
+
+try:
+    import cv2
+except Exception:  # pragma: no cover - optional dependency
+    cv2 = None
+
+try:  # pragma: no cover - optional dependency
+    from rapidocr_onnxruntime import RapidOCR
+except Exception:  # pragma: no cover
+    RapidOCR = None
 
 from app.models.schemas import BubbleType
 
@@ -24,6 +35,9 @@ class DetectedBubble:
 
 
 class OCRService:
+    def __init__(self) -> None:
+        self._rapid_ocr = RapidOCR() if RapidOCR and cv2 is not None else None
+
     UI_KEYWORDS = ["YOU", "ARE", "CHARACTER", "SYSTEM", "QUEST", "MISSION", "STATUS", "KNIGHT", "BLOOD", "IRON"]
 
     def extract(self, image_path: Path, box: Sequence[float]) -> str:
@@ -132,8 +146,9 @@ class OCRService:
         image = Image.open(image_path).convert("RGB")
         width, height = image.size
         ui_bubbles: List[DetectedBubble] = []
-        
+
         def _extract_text_from_region(region: tuple[int, int, int, int]) -> str:
+
             crop = image.crop(region).convert("L")
             candidates: list[str] = []
 
@@ -159,11 +174,18 @@ class OCRService:
                 key=lambda text: self._score_ui_candidate(text),
                 reverse=True,
             )
-            top = scored[0]
-            return self._normalize_ui_text(top)
-        
+            return scored[0]
+
         ui_keywords = ["YOU ARE", "CHARACTER", "SYSTEM", "QUEST", "MISSION", "STATUS"]
-        
+
+        def _should_use_text(text: str, min_score: int = 60) -> bool:
+            score = self._score_ui_candidate(text)
+            if not text or score < min_score:
+                return False
+            if any(keyword in text.upper() for keyword in ui_keywords):
+                return True
+            return score >= (min_score + 20)
+
         # Focused region on the right side where panels usually appear
         panel_region = (
             int(width * 0.45),
@@ -172,31 +194,40 @@ class OCRService:
             int(height * 0.75),
         )
         panel_text = _extract_text_from_region(panel_region)
-        if panel_text and len(panel_text) > 8:
-            # Check if this is likely UI text (contains system keywords)
-            if any(keyword in panel_text.upper() for keyword in ui_keywords):
+        if self._score_ui_candidate(panel_text) < 80:
+            rapid_text = self._extract_panel_with_rapid(image, panel_region)
+            if rapid_text:
+                panel_text = rapid_text
+
+        if panel_text:
+            normalized = self._normalize_ui_text(panel_text)
+            if _should_use_text(normalized, min_score=50):
                 ui_bubbles.append(
                     DetectedBubble(
                         bubble_id="ui_panel",
                         box=list(panel_region),
-                        text=panel_text,
+                        text=normalized,
                         kind="narration",
+                        voice_hint="voice_narrator",
                     )
                 )
-        
+
         # Check bottom region for UI text (bottom 20% of image)
         bottom_region = (0, int(height * 0.8), width, height)
         bottom_text = _extract_text_from_region(bottom_region)
-        if bottom_text and len(bottom_text) > 10:
-            ui_bubbles.append(
-                DetectedBubble(
-                    bubble_id="ui_bottom",
-                    box=list(bottom_region),
-                    text=bottom_text,
-                    kind="narration",
+        if bottom_text:
+            normalized = self._normalize_ui_text(bottom_text)
+            if _should_use_text(normalized):
+                ui_bubbles.append(
+                    DetectedBubble(
+                        bubble_id="ui_bottom",
+                        box=list(bottom_region),
+                        text=normalized,
+                        kind="narration",
+                        voice_hint="voice_narrator",
+                    )
                 )
-            )
-        
+
         return ui_bubbles
 
     def _generate_variants(self, crop: Image.Image) -> list[Image.Image]:
@@ -270,6 +301,57 @@ class OCRService:
         if upper.startswith("YOU ARE NOW") and not upper.endswith((".", "?", "!")):
             return text.rstrip() + "."
         return text
+
+    def _extract_panel_with_rapid(
+        self, image: Image.Image, region: tuple[int, int, int, int]
+    ) -> str:
+        if not self._rapid_ocr or cv2 is None:
+            return ""
+        crop = image.crop(region)
+        arr = cv2.cvtColor(np.array(crop), cv2.COLOR_RGB2BGR)
+        hsv = cv2.cvtColor(arr, cv2.COLOR_BGR2HSV)
+        mask = cv2.inRange(hsv, (90, 60, 60), (140, 255, 255))
+        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        if not contours:
+            return ""
+        contour = max(contours, key=cv2.contourArea)
+        if cv2.contourArea(contour) < 500:
+            return ""
+        rect = cv2.minAreaRect(contour)
+        box = cv2.boxPoints(rect).astype("float32")
+        width = max(int(rect[1][0]), 1)
+        height = max(int(rect[1][1]), 1)
+        ordered = self._order_points(box)
+        dst = np.array(
+            [[0, 0], [width - 1, 0], [width - 1, height - 1], [0, height - 1]], dtype="float32"
+        )
+        matrix = cv2.getPerspectiveTransform(ordered, dst)
+        warped = cv2.warpPerspective(arr, matrix, (width, height))
+        warped = cv2.resize(warped, (warped.shape[1] * 2, warped.shape[0] * 2))
+        result = self._rapid_ocr(warped)
+        if not result or not result[0]:
+            return ""
+        lines = sorted(
+            result[0],
+            key=lambda item: (
+                min(point[1] for point in item[0]),
+                min(point[0] for point in item[0]),
+            ),
+        )
+        combined = " ".join(entry[1] for entry in lines if entry[1].strip())
+        cleaned = self._clean_ui_text(combined)
+        return cleaned
+
+    @staticmethod
+    def _order_points(points: np.ndarray) -> np.ndarray:
+        rect = np.zeros((4, 2), dtype="float32")
+        s = points.sum(axis=1)
+        rect[0] = points[np.argmin(s)]
+        rect[2] = points[np.argmax(s)]
+        diff = np.diff(points, axis=1)
+        rect[1] = points[np.argmin(diff)]
+        rect[3] = points[np.argmax(diff)]
+        return rect
 
 
 ocr_service = OCRService()
