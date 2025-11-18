@@ -148,8 +148,8 @@ class OCRService:
         ui_bubbles: List[DetectedBubble] = []
 
         def _extract_text_from_region(region: tuple[int, int, int, int]) -> str:
-
-            crop = image.crop(region).convert("L")
+            # Crop the region but keep RGB for blue channel extraction
+            crop = image.crop(region)
             candidates: list[str] = []
 
             def _add_candidate(text: str) -> None:
@@ -157,11 +157,15 @@ class OCRService:
                 if cleaned:
                     candidates.append(cleaned)
 
+            # Try multiple preprocessing approaches
             for variant in self._generate_variants(crop):
-                for config in ("--psm 6 --oem 1", "--psm 7 --oem 1"):
+                # Try different PSM modes for better detection
+                for config in ("--psm 6 --oem 1", "--psm 7 --oem 1", "--psm 8 --oem 1", "--psm 11 --oem 1"):
                     text = pytesseract.image_to_string(variant, config=config).strip()
                     if text:
                         _add_candidate(text)
+                
+                # Also try with data extraction for word confidence
                 data_text = self._text_from_data(variant)
                 if data_text:
                     _add_candidate(data_text)
@@ -169,14 +173,22 @@ class OCRService:
             if not candidates:
                 return ""
 
-            scored = sorted(
-                candidates,
-                key=lambda text: self._score_ui_candidate(text),
-                reverse=True,
-            )
-            return scored[0]
+            # Score and normalize candidates
+            best_candidates = []
+            for text in candidates:
+                normalized = self._normalize_ui_text(text)
+                score = self._score_ui_candidate(normalized)
+                if score > 0:
+                    best_candidates.append((normalized, score))
+            
+            if not best_candidates:
+                return ""
+            
+            # Sort by score and return best
+            best_candidates.sort(key=lambda x: x[1], reverse=True)
+            return best_candidates[0][0]
 
-        ui_keywords = ["YOU ARE", "CHARACTER", "SYSTEM", "QUEST", "MISSION", "STATUS"]
+        ui_keywords = ["YOU ARE", "CHARACTER", "SYSTEM", "QUEST", "MISSION", "STATUS", "KNIGHT", "BLOOD", "IRON"]
 
         def _should_use_text(text: str, min_score: int = 60) -> bool:
             score = self._score_ui_candidate(text)
@@ -194,10 +206,11 @@ class OCRService:
             int(height * 0.75),
         )
         panel_text = _extract_text_from_region(panel_region)
-        if self._score_ui_candidate(panel_text) < 80:
-            rapid_text = self._extract_panel_with_rapid(image, panel_region)
-            if rapid_text:
-                panel_text = rapid_text
+        # Temporarily disable RapidOCR due to memory issues on Fly.io
+        # if self._score_ui_candidate(panel_text) < 80:
+        #     rapid_text = self._extract_panel_with_rapid(image, panel_region)
+        #     if rapid_text:
+        #         panel_text = rapid_text
 
         if panel_text:
             normalized = self._normalize_ui_text(panel_text)
@@ -231,7 +244,20 @@ class OCRService:
         return ui_bubbles
 
     def _generate_variants(self, crop: Image.Image) -> list[Image.Image]:
+        """Generate multiple preprocessed variants of the image for OCR."""
         variants: list[Image.Image] = []
+        
+        # If the image is RGB, try extracting blue channel for blue UI elements
+        if crop.mode == "RGB":
+            r, g, b = crop.split()
+            # Blue channel enhanced
+            blue_enhanced = ImageOps.autocontrast(b)
+            variants.append(blue_enhanced)
+            # Convert to grayscale for other processing
+            crop = crop.convert("L")
+        elif crop.mode != "L":
+            crop = crop.convert("L")
+        
         for angle in (0, -6, 6):
             rotated = crop.rotate(angle, expand=True, fillcolor=255)
             enlarged = rotated.resize(
