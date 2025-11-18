@@ -26,6 +26,7 @@ class VisionService:
     """Service for analyzing manga/manhwa images with AI vision."""
 
     CHAT_URL = "https://api.deepseek.com/v1/chat/completions"
+    VISION_MODEL = "deepseek-vision"
 
     VOICE_MAPPING = {
         # Female character archetypes
@@ -67,7 +68,7 @@ class VisionService:
                 "Content-Type": "application/json",
             }
             payload = {
-                "model": "deepseek-chat",
+                "model": self.VISION_MODEL,
                 "messages": [
                     {
                         "role": "user",
@@ -165,7 +166,7 @@ Do NOT add descriptions or commentary—only the raw text content."""
                 "Content-Type": "application/json",
             }
             payload = {
-                "model": "deepseek-chat",
+                "model": self.VISION_MODEL,
                 "messages": [
                     {
                         "role": "user",
@@ -531,7 +532,7 @@ Do NOT add descriptions or commentary—only the raw text content."""
                 "Content-Type": "application/json",
             }
             payload = {
-                "model": "deepseek-chat",
+                "model": self.VISION_MODEL,
                 "messages": [
                     {
                         "role": "user",
