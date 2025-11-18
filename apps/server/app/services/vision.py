@@ -25,8 +25,8 @@ class CharacterAnalysis:
 class VisionService:
     """Service for analyzing manga/manhwa images with AI vision."""
 
-    CHAT_URL = "https://api.deepseek.com/v1/chat/completions"
-    VISION_MODEL = "deepseek-vl"
+    OPENAI_URL = "https://api.openai.com/v1/responses"
+    VISION_MODEL = "gpt-4o-mini"
 
     VOICE_MAPPING = {
         # Female character archetypes
@@ -47,8 +47,8 @@ class VisionService:
     def detect_and_read_all_bubbles(self, image_path: Path) -> list[tuple[list[int], str, CharacterAnalysis]]:
         """Use AI vision to find ALL text bubbles and read them in one go."""
         
-        if not settings.deepseek_api_key:
-            print("⚠️ DeepSeek API key not set")
+        if not settings.openai_api_key:
+            print("⚠️ OpenAI API key not set")
             return []
         
         try:
@@ -62,47 +62,20 @@ class VisionService:
             img_bytes = buffered.getvalue()
             img_base64 = base64.b64encode(img_bytes).decode()
             
-            # Call DeepSeek Vision API to find and read ALL text
-            headers = {
-                "Authorization": f"Bearer {settings.deepseek_api_key}",
-                "Content-Type": "application/json",
-            }
-            prompt = """You are an expert manga letterer. Decode the base64-encoded PNG below, then:
-1. Find EVERY speech bubble, narration box, and UI panel that contains readable text.
-2. Return the exact text you see for each element in top-to-bottom, left-to-right reading order.
-3. Format the response as either JSON ( [{"text":"..."}, {"text":"..."}] ) or bullet lines starting with TEXT:.
-Do NOT add commentary—only the raw text content.
-
-BASE64_IMAGE:
-"""
-            payload = {
-                "model": self.VISION_MODEL,
-                "messages": [
-                    {
-                        "role": "user",
-                        "content": prompt + img_base64,
-                    }
-                ],
-                "max_tokens": 500,
-                "temperature": 0,
-            }
+            prompt = (
+                "Extract EVERY readable text from this entire manga page. "
+                "Include speech bubbles, narration boxes, UI panels, glowing screens, "
+                "sound effects, and any stylized text. Return the text in reading order "
+                "(top-to-bottom, left-to-right). Use either JSON "
+                '([{\"text\":\"...\"}, ...]) or bullet lines starting with TEXT:. '
+                "Do not add commentary."
+            )
             
-            print("🤖 Calling DeepSeek Vision API to detect and read ALL bubbles")
-            response = requests.post(self.CHAT_URL, headers=headers, json=payload, timeout=30)
-            try:
-                response.raise_for_status()
-            except requests.HTTPError as exc:
-                body = response.text if response is not None else ""
-                print(f"❌ Vision HTTPError {response.status_code if response else '??'}: {body[:500]}")
-                raise exc
-            result = response.json()
-            
-            if "choices" not in result or len(result["choices"]) == 0:
-                print("⚠️ Vision API returned no results")
+            print("🤖 Calling GPT-4o-mini to detect and read ALL bubbles")
+            content = self._call_openai(prompt, img_base64, max_tokens=700)
+            if not content:
+                print("⚠️ Vision API returned no text")
                 return []
-            
-            raw_content = result["choices"][0]["message"].get("content")
-            content = self._extract_text_content(raw_content)
             print(f"📝 Vision API response:\n{content}")
             
             texts = self._parse_detected_texts(content)
@@ -134,8 +107,8 @@ BASE64_IMAGE:
     ) -> tuple[str, CharacterAnalysis]:
         """Use AI vision to read text from a specific bubble region."""
         
-        if not settings.deepseek_api_key:
-            print("⚠️ DeepSeek API key not set, using fallback")
+        if not settings.openai_api_key:
+            print("⚠️ OpenAI API key not set, using fallback")
             return "", self._fallback_analysis()
         
         try:
@@ -151,46 +124,16 @@ BASE64_IMAGE:
             img_bytes = buffered.getvalue()
             img_base64 = base64.b64encode(img_bytes).decode()
             
-            # Call DeepSeek Vision API
-            headers = {
-                "Authorization": f"Bearer {settings.deepseek_api_key}",
-                "Content-Type": "application/json",
-            }
-            prompt = """You are reading a single cropped speech bubble or UI panel.
-Decode the base64 PNG below and transcribe the text EXACTLY as written (keep punctuation, ellipses, casing).
-Return ONLY the text string, no commentary.
-
-BASE64_IMAGE:
-"""
-            payload = {
-                "model": self.VISION_MODEL,
-                "messages": [
-                    {
-                        "role": "user",
-                        "content": prompt + img_base64,
-                    }
-                ],
-                "max_tokens": 200,
-                "temperature": 0,
-            }
+            prompt = (
+                "Transcribe this manga speech bubble exactly as written. Preserve punctuation, "
+                "question marks, ellipses, shouting, and casing. Return ONLY the text."
+            )
             
-            print(f"🤖 Calling DeepSeek Vision API for bubble at {bubble_box}")
-            response = requests.post(self.CHAT_URL, headers=headers, json=payload, timeout=15)
-            try:
-                response.raise_for_status()
-            except requests.HTTPError as exc:
-                body = response.text if response is not None else ""
-                print(f"❌ Vision HTTPError {response.status_code if response else '??'}: {body[:500]}")
-                raise exc
-            result = response.json()
-            
-            if "choices" in result and len(result["choices"]) > 0:
-                text = result["choices"][0]["message"]["content"].strip()
-                # Clean up the response
+            print(f"🤖 Calling GPT-4o-mini for bubble at {bubble_box}")
+            text = self._call_openai(prompt, img_base64, max_tokens=200)
+            if text:
                 text = text.replace("\n", " ").replace("  ", " ").strip()
                 print(f"✨ Vision API read: {text}")
-                
-                # Analyze the text for voice selection
                 analysis = self._analyze_from_text(text, bubble_box, page_height)
                 return text, analysis
             
@@ -214,31 +157,6 @@ BASE64_IMAGE:
         
         # Use smart text analysis to determine emotion and voice
         return self._analyze_from_text(text, bubble_box, page_height)
-
-    def _extract_text_content(self, content) -> str:
-        """Normalize DeepSeek message content (string, list, dict) into plain text."""
-        if content is None:
-            return ""
-        if isinstance(content, str):
-            return content.strip()
-        if isinstance(content, list):
-            parts: list[str] = []
-            for entry in content:
-                if isinstance(entry, str):
-                    parts.append(entry)
-                elif isinstance(entry, dict):
-                    entry_type = entry.get("type")
-                    if entry_type == "text" and "text" in entry:
-                        parts.append(str(entry["text"]))
-                    elif "content" in entry:
-                        parts.append(self._extract_text_content(entry["content"]))
-            return "\n".join(part for part in parts if part).strip()
-        if isinstance(content, dict):
-            if "text" in content:
-                return str(content["text"]).strip()
-            if "content" in content:
-                return self._extract_text_content(content["content"])
-        return str(content).strip()
 
     def _parse_detected_texts(self, content: str) -> list[str]:
         """Parse multi-bubble output from the vision API into clean text strings."""
@@ -494,9 +412,9 @@ BASE64_IMAGE:
         return False
 
     def _read_with_vision(self, image_path: Path, bubble_box: list[int]) -> str:
-        """Use DeepSeek Vision API to read text from a specific region."""
-        if not settings.deepseek_api_key:
-            print("⚠️ DeepSeek API key not set, skipping vision API")
+        """Use the vision model to read text from a specific region."""
+        if not settings.openai_api_key:
+            print("⚠️ OpenAI API key not set, skipping vision API")
             return ""
         
         try:
@@ -512,48 +430,74 @@ BASE64_IMAGE:
             img_bytes = buffered.getvalue()
             img_base64 = base64.b64encode(img_bytes).decode()
             
-            # Call DeepSeek Vision API
-            headers = {
-                "Authorization": f"Bearer {settings.deepseek_api_key}",
-                "Content-Type": "application/json",
-            }
-            prompt = """Decode the base64 PNG bubble below and read ONLY the visible text.
-Return just the text content (single line). If there are multiple lines, separate them with spaces.
-
-BASE64_IMAGE:
-"""
-            payload = {
-                "model": self.VISION_MODEL,
-                "messages": [
-                    {
-                        "role": "user",
-                        "content": prompt + img_base64,
-                    }
-                ],
-                "max_tokens": 150,
-                "temperature": 0.1,
-            }
-            
-            response = requests.post(self.CHAT_URL, headers=headers, json=payload, timeout=10)
-            try:
-                response.raise_for_status()
-            except requests.HTTPError as exc:
-                body = response.text if response is not None else ""
-                print(f"❌ Vision HTTPError {response.status_code if response else '??'}: {body[:500]}")
-                raise exc
-            result = response.json()
-            
-            if "choices" in result and len(result["choices"]) > 0:
-                content = result["choices"][0]["message"]["content"].strip()
-                # Clean up the response
-                content = content.replace("\n", " ").replace("  ", " ").strip()
-                return content
-            
+            prompt = (
+                "Read ONLY the text visible in this cropped bubble/panel. "
+                "Return just the text (single line)."
+            )
+            text = self._call_openai(prompt, img_base64, max_tokens=150)
+            if text:
+                return text.replace("\n", " ").replace("  ", " ").strip()
             return ""
             
         except Exception as e:
             print(f"❌ Vision API failed: {type(e).__name__}: {str(e)}")
             return ""
+
+    def _call_openai(self, prompt: str, img_base64: str, max_tokens: int = 500) -> str:
+        if not settings.openai_api_key:
+            return ""
+        
+        headers = {
+            "Authorization": f"Bearer {settings.openai_api_key}",
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "model": self.VISION_MODEL,
+            "input": [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "input_text", "text": prompt},
+                        {
+                            "type": "input_image",
+                            "image_url": {"url": f"data:image/png;base64,{img_base64}"},
+                        },
+                    ],
+                }
+            ],
+            "max_output_tokens": max_tokens,
+        }
+        
+        response = requests.post(self.OPENAI_URL, headers=headers, json=payload, timeout=60)
+        try:
+            response.raise_for_status()
+        except requests.HTTPError as exc:
+            body = response.text if response is not None else ""
+            print(f"❌ Vision HTTPError {response.status_code if response else '??'}: {body[:500]}")
+            raise exc
+        
+        data = response.json()
+        return self._extract_openai_output(data)
+
+    def _extract_openai_output(self, payload: dict) -> str:
+        if not payload:
+            return ""
+        
+        outputs = payload.get("output") or []
+        text_chunks: list[str] = []
+        for message in outputs:
+            contents = message.get("content") or []
+            for item in contents:
+                if item.get("type") in {"output_text", "text"}:
+                    text = item.get("text")
+                    if text:
+                        text_chunks.append(text)
+        # Some responses might nest text differently; fall back to usage field
+        if not text_chunks and "usage" in payload:
+            text = payload.get("usage", {}).get("output_text")
+            if text:
+                text_chunks.append(text)
+        return "\n".join(chunk.strip() for chunk in text_chunks if chunk).strip()
 
     def _fallback_analysis(self) -> CharacterAnalysis:
         """Fallback when AI analysis isn't available."""

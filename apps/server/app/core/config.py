@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     elevenlabs_api_key: str | None = None
     deepsick_api_key: str | None = None
     deepseek_api_key: str | None = None
+    openai_api_key: str | None = None
     azure_speech_key: str | None = None
     azure_speech_region: str | None = None
     google_application_credentials: str | None = None
