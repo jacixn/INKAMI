@@ -114,7 +114,8 @@ class VisionService:
 
         if has_male_keywords:
             # Male character dialogue takes priority
-            voice_archetype = "male_confident" if emotion in {"excited", "assertive"} else "male_stoic"
+            # Use male_stoic for questioning/thoughtful, male_confident for assertions
+            voice_archetype = "male_stoic" if emotion in {"thoughtful", "confused"} else "male_confident"
         elif is_system_message:
             voice_archetype = "narrator"
             stability = max(stability, 0.65)
