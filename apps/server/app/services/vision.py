@@ -50,8 +50,15 @@ class VisionService:
     ) -> CharacterAnalysis:
         """Analyze a speech bubble and determine character emotion and voice."""
         
-        # For now, use smart text analysis to determine emotion and voice
-        # This is a temporary solution until we get vision API working properly
+        # If the text looks like OCR gibberish, try vision API to read it properly
+        if self._is_ocr_gibberish(text):
+            print(f"🔍 OCR gibberish detected, trying vision API: {text[:50]}")
+            vision_result = self._read_with_vision(image_path, bubble_box)
+            if vision_result and len(vision_result) > 5:
+                print(f"✨ Vision API successfully read: {vision_result}")
+                text = vision_result
+        
+        # Use smart text analysis to determine emotion and voice
         return self._analyze_from_text(text, bubble_box, page_height)
 
     def _analyze_from_text(
@@ -174,6 +181,91 @@ class VisionService:
             stability=stability,
             similarity_boost=0.75,
         )
+
+    def _is_ocr_gibberish(self, text: str) -> bool:
+        """Detect if OCR produced gibberish that needs vision API correction."""
+        if not text or len(text) < 5:
+            return True
+        
+        # Count how many characters are NOT letters/numbers/basic punctuation
+        total_chars = len(text)
+        junk_chars = sum(1 for char in text if char not in "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 ?!.,;:-'\"")
+        junk_ratio = junk_chars / max(1, total_chars)
+        
+        # If more than 25% junk characters, it's probably gibberish
+        if junk_ratio > 0.25:
+            return True
+        
+        # Check for common OCR mistakes with UI text
+        gibberish_patterns = ["\\", "|", "Ny ", "Sy.", "gl ag", "eo y"]
+        if any(pattern in text for pattern in gibberish_patterns):
+            return True
+        
+        return False
+
+    def _read_with_vision(self, image_path: Path, bubble_box: list[int]) -> str:
+        """Use DeepSeek Vision API to read text from a specific region."""
+        if not settings.deepseek_api_key:
+            print("⚠️ DeepSeek API key not set, skipping vision API")
+            return ""
+        
+        try:
+            # Crop the image to the bubble region
+            from PIL import Image
+            image = Image.open(image_path)
+            crop = image.crop((bubble_box[0], bubble_box[1], bubble_box[2], bubble_box[3]))
+            
+            # Convert to base64
+            import io
+            buffered = io.BytesIO()
+            crop.save(buffered, format="PNG")
+            img_bytes = buffered.getvalue()
+            img_base64 = base64.b64encode(img_bytes).decode()
+            
+            # Call DeepSeek Vision API
+            url = "https://api.deepseek.com/chat/completions"
+            headers = {
+                "Authorization": f"Bearer {settings.deepseek_api_key}",
+                "Content-Type": "application/json",
+            }
+            payload = {
+                "model": "deepseek-chat",
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:image/png;base64,{img_base64}"
+                                }
+                            },
+                            {
+                                "type": "text",
+                                "text": "Read ONLY the text visible in this image. Return just the text content, nothing else. If there are multiple lines, separate them with spaces."
+                            }
+                        ]
+                    }
+                ],
+                "max_tokens": 150,
+                "temperature": 0.1,
+            }
+            
+            response = requests.post(url, headers=headers, json=payload, timeout=10)
+            response.raise_for_status()
+            result = response.json()
+            
+            if "choices" in result and len(result["choices"]) > 0:
+                content = result["choices"][0]["message"]["content"].strip()
+                # Clean up the response
+                content = content.replace("\n", " ").replace("  ", " ").strip()
+                return content
+            
+            return ""
+            
+        except Exception as e:
+            print(f"❌ Vision API failed: {type(e).__name__}: {str(e)}")
+            return ""
 
     def _fallback_analysis(self) -> CharacterAnalysis:
         """Fallback when AI analysis isn't available."""
