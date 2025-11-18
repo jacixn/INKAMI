@@ -26,13 +26,13 @@ class ChapterFile(TypedDict):
 
 
 def enqueue_chapter_job(
-    chapter_id: str, files: Iterable[ChapterFile], processing_mode: ProcessingMode = "bring_to_life"
+    chapter_id: str, files: Iterable[ChapterFile], processing_mode: ProcessingMode = "bring_to_life", narrator_gender: str = "female"
 ) -> str:
     job = chapter_store.create_job()
     chapter_store.update_job(
         job.job_id, status="processing", chapter_id=chapter_id, progress=5
     )
-    process_chapter(chapter_id, list(files), job.job_id, processing_mode)
+    process_chapter(chapter_id, list(files), job.job_id, processing_mode, narrator_gender)
     chapter_store.update_job(job.job_id, status="ready", progress=100)
     return job.job_id
 
@@ -69,6 +69,7 @@ def process_chapter(
     files: list[ChapterFile],
     job_id: str | None = None,
     processing_mode: ProcessingMode = "bring_to_life",
+    narrator_gender: str = "female",
 ) -> None:
     if not files:
         return
@@ -116,6 +117,12 @@ def process_chapter(
         for bubble_idx, (bubble_box, text, analysis) in enumerate(vision_bubbles):
             normalized_text = _normalize_text(text)
             bubble_type = _bubble_kind_from_analysis(analysis)
+            
+            # Skip SFX bubbles in narrate mode
+            if processing_mode == "narrate" and bubble_type == "sfx":
+                print(f"⏭️ Skipping SFX bubble in narrate mode: {text[:50]}")
+                continue
+            
             character_key = (analysis.character_type or "").strip().lower()
             reuse_allowed = (
                 processing_mode != "narrate"
@@ -124,7 +131,8 @@ def process_chapter(
                 and bubble_type not in {"sfx", "narration"}
             )
             if processing_mode == "narrate":
-                assigned_voice = "voice_narrator"
+                # Use male or female narrator voice based on user selection
+                assigned_voice = "voice_narrator_male" if narrator_gender == "male" else "voice_narrator"
                 stability = 0.7
                 similarity_boost = 0.85
                 speaker_label = "Narrator"

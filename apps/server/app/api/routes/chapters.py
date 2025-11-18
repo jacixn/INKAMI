@@ -22,6 +22,7 @@ async def create_chapter(
     request: Request,
     files: Annotated[list[UploadFile], File(..., description="Chapter archive/pages")],
     processing_mode: str = Form("bring_to_life"),
+    narrator_gender: str = Form("female"),
 ) -> dict[str, str]:
     if not files:
         raise HTTPException(status_code=400, detail="No files uploaded.")
@@ -76,8 +77,12 @@ async def create_chapter(
     mode = (processing_mode or "bring_to_life").strip().lower()
     if mode not in {"bring_to_life", "narrate"}:
         raise HTTPException(status_code=400, detail="Invalid processing mode.")
+    
+    narrator = (narrator_gender or "female").strip().lower()
+    if narrator not in {"male", "female"}:
+        narrator = "female"
 
-    job_id = enqueue_chapter_job(chapter_id, saved_files, mode)  # type: ignore[arg-type]
+    job_id = enqueue_chapter_job(chapter_id, saved_files, mode, narrator)  # type: ignore[arg-type]
 
     return {"chapter_id": chapter_id, "job_id": job_id}
 

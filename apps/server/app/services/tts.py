@@ -31,7 +31,8 @@ class TTSService:
         "voice_adult_m": "TxGEqnHWrfWFTfGW9XjX",  # Josh - mature deep voice
         
         # Special voices
-        "voice_narrator": "EXAVITQu4vr4xnSDxMaL",  # Sarah - clear narrator
+        "voice_narrator": "EXAVITQu4vr4xnSDxMaL",  # Sarah - clear narrator (female)
+        "voice_narrator_male": "ErXwobaYiN019PkySvjV",  # Antoni - friendly male narrator
         "voice_system": "CwhRBWXzGAHq8TQ4Fs17",  # Roger - calm, precise system tone
         "voice_sfx": "N2lVS1w4EtoT3dr4eOWO",  # Callum - punchy FX cues
     }
@@ -43,7 +44,8 @@ class TTSService:
         "voice_child_m": "Young Boy",
         "voice_young_m": "Young Man",
         "voice_adult_m": "Mature Man",
-        "voice_narrator": "Narrator",
+        "voice_narrator": "Narrator (Female)",
+        "voice_narrator_male": "Narrator (Male)",
         "voice_system": "System Voice",
         "voice_sfx": "FX Voice",
     }

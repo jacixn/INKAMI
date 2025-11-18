@@ -25,6 +25,7 @@ export default function UploadWizard() {
   const [processingMode, setProcessingMode] = useState<"bring_to_life" | "narrate">(
     "bring_to_life"
   );
+  const [narratorGender, setNarratorGender] = useState<"male" | "female">("female");
 
   const sizeText = useMemo(() => {
     const total = files.reduce((acc, file) => acc + file.size, 0);
@@ -56,6 +57,7 @@ export default function UploadWizard() {
       const formData = new FormData();
       files.forEach((file) => formData.append("files", file));
       formData.append("processing_mode", processingMode);
+      formData.append("narrator_gender", narratorGender);
 
       const response = await axios.post(`${apiBase}/api/chapters`, formData, {
         headers: { "Content-Type": "multipart/form-data" }
@@ -197,6 +199,48 @@ export default function UploadWizard() {
             </p>
           </label>
         </div>
+        
+        {processingMode === "narrate" && (
+          <div className="mt-4 space-y-2">
+            <p className="text-sm font-medium text-white/80">Narrator voice:</p>
+            <div className="flex gap-3">
+              <label
+                className={`flex-1 rounded-xl border px-3 py-2 text-center text-sm transition ${
+                  narratorGender === "female"
+                    ? "border-sky-400/80 bg-white/10 text-white"
+                    : "border-white/10 bg-black/20 text-white/60"
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="narrator-gender"
+                  value="female"
+                  className="sr-only"
+                  checked={narratorGender === "female"}
+                  onChange={() => setNarratorGender("female")}
+                />
+                Female
+              </label>
+              <label
+                className={`flex-1 rounded-xl border px-3 py-2 text-center text-sm transition ${
+                  narratorGender === "male"
+                    ? "border-sky-400/80 bg-white/10 text-white"
+                    : "border-white/10 bg-black/20 text-white/60"
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="narrator-gender"
+                  value="male"
+                  className="sr-only"
+                  checked={narratorGender === "male"}
+                  onChange={() => setNarratorGender("male")}
+                />
+                Male
+              </label>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="space-y-3">
