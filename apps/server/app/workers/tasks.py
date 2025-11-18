@@ -1,18 +1,14 @@
 from __future__ import annotations
 
-import uuid
 from pathlib import Path
 import re
 from typing import Iterable, TypedDict
 
 from app.models.schemas import BubbleItem, ChapterPayload, PagePayload, WordTime
-from app.services.ocr import DetectedBubble, ocr_service
 from app.services.pipeline import chapter_store
 from app.services.speaker import speaker_linker
 from app.services.tts import tts_service
-from app.services.vision import vision_service
-
-DEFAULT_VOICE = "voice_friendly_f"
+from app.services.vision import CharacterAnalysis, vision_service
 
 
 class ChapterFile(TypedDict):
@@ -33,18 +29,6 @@ def enqueue_chapter_job(chapter_id: str, files: Iterable[ChapterFile]) -> str:
     return job.job_id
 
 
-def _voice_for_bubble(index: int) -> str:
-    palette = [
-        "voice_friendly_f",
-        "voice_cool_f",
-        "voice_brash_m",
-        "voice_stoic_m",
-        "voice_androgynous",
-        "voice_narrator",
-    ]
-    return palette[index % len(palette)]
-
-
 def _normalize_text(text: str) -> str:
     # Remove OCR artifacts and normalize spacing
     cleaned = text.replace("|", " ")
@@ -53,18 +37,6 @@ def _normalize_text(text: str) -> str:
     cleaned = re.sub(r"^['\"]+|['\"]+$", "", cleaned)  # Remove leading/trailing quotes
     cleaned = re.sub(r"\s+", " ", cleaned)  # Normalize whitespace
     return cleaned.strip()
-
-
-def _fallback_bubble(page_width: int, page_height: int) -> DetectedBubble:
-    text = "We couldn't transcribe this bubble yet, but playback is ready."
-    return DetectedBubble(
-        bubble_id=str(uuid.uuid4()),
-        box=[40, 40, page_width - 40, int(page_height * 0.3)],
-        text=text,
-        kind="dialogue",
-        speaker_name=None,
-        voice_hint=DEFAULT_VOICE,
-    )
 
 
 def process_chapter(chapter_id: str, files: list[ChapterFile], job_id: str | None = None) -> None:

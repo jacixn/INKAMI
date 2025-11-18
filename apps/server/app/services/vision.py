@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import base64
 import json
-import random
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -79,12 +79,13 @@ class VisionService:
                             },
                             {
                                 "type": "text",
-                                "text": """This is a manga/manhwa page. Find ALL text bubbles and UI panels.
-For each text element you find, return it in this exact format:
-TEXT: [the exact text you see]
-
-List them in reading order (top to bottom, left to right).
-Do not add any commentary, just the text."""
+                                "text": """You are an expert manga letterer. Look at the ENTIRE page image.
+1. Find EVERY speech bubble, narration box, and UI panel that contains readable text.
+2. Return the exact text you see for each element in top-to-bottom reading order.
+3. Format the response as either:
+   - JSON array: [{"text": "..."}, {"text": "..."}]
+   - or bullet list where each line starts with TEXT:, Bubble:, Panel:, or a number.
+Do NOT add descriptions or commentary—only the raw text content."""
                             }
                         ]
                     }
@@ -93,7 +94,7 @@ Do not add any commentary, just the text."""
                 "temperature": 0,
             }
             
-            print(f"🤖 Calling DeepSeek Vision API to detect and read ALL bubbles")
+            print("🤖 Calling DeepSeek Vision API to detect and read ALL bubbles")
             response = requests.post(url, headers=headers, json=payload, timeout=30)
             response.raise_for_status()
             result = response.json()
@@ -105,22 +106,20 @@ Do not add any commentary, just the text."""
             content = result["choices"][0]["message"]["content"].strip()
             print(f"📝 Vision API response:\n{content}")
             
-            # Parse the response to extract text entries
-            bubbles = []
-            lines = content.split("\n")
-            width, height = image.size
-            y_position = 200  # Start position
+            texts = self._parse_detected_texts(content)
+            if not texts:
+                print("⚠️ Could not parse any text entries from vision response")
+                return []
             
-            for line in lines:
-                if line.startswith("TEXT:"):
-                    text = line[5:].strip()
-                    if text and len(text) > 2:
-                        # Create a bubble box (we don't have exact coordinates from vision API)
-                        bubble_box = [100, y_position, width - 100, y_position + 100]
-                        analysis = self._analyze_from_text(text, bubble_box, height)
-                        bubbles.append((bubble_box, text, analysis))
-                        y_position += 150  # Move down for next bubble
-                        print(f"✨ Found bubble: {text[:50]}")
+            width, height = image.size
+            boxes = self._approximate_bubble_boxes(len(texts), width, height)
+            
+            bubbles: list[tuple[list[int], str, CharacterAnalysis]] = []
+            for idx, text in enumerate(texts):
+                bubble_box = boxes[idx] if idx < len(boxes) else [80, 80, width - 80, height - 80]
+                analysis = self._analyze_from_text(text, bubble_box, height)
+                bubbles.append((bubble_box, text, analysis))
+                print(f"✨ Vision detected text #{idx + 1}: {text[:60]}")
             
             return bubbles
             
@@ -217,6 +216,117 @@ Do not add any commentary, just the text."""
         
         # Use smart text analysis to determine emotion and voice
         return self._analyze_from_text(text, bubble_box, page_height)
+
+    def _parse_detected_texts(self, content: str) -> list[str]:
+        """Parse multi-bubble output from the vision API into clean text strings."""
+        if not content:
+            return []
+        
+        content = content.strip()
+        if not content:
+            return []
+        
+        # Try JSON decoding first (if the model followed instructions)
+        try:
+            parsed = json.loads(content)
+            json_texts = self._extract_texts_from_structure(parsed)
+            if json_texts:
+                return json_texts
+        except json.JSONDecodeError:
+            pass
+        
+        lines = content.replace("\r", "\n").split("\n")
+        cleaned_lines: list[str] = []
+        for raw_line in lines:
+            line = raw_line.strip()
+            if not line:
+                cleaned_lines.append("")
+                continue
+            line = line.strip("-•*> ")
+            line = re.sub(r"^\d+[\)\.:-]\s*", "", line)
+            line = re.sub(r"(?i)^(bubble|panel|text|speech)\s*\d*\s*[:\-]\s*", "", line).strip()
+            cleaned_lines.append(line)
+        
+        bubbles: list[str] = []
+        buffer: list[str] = []
+        
+        def _flush_buffer() -> None:
+            if buffer:
+                joined = " ".join(buffer).strip(" \"“”")
+                if joined:
+                    bubbles.append(joined)
+                buffer.clear()
+        
+        for line in cleaned_lines:
+            if not line:
+                _flush_buffer()
+                continue
+            if line.startswith(("\"", "“")) and line.endswith(("\"", "”")) and len(line) > 1:
+                _flush_buffer()
+                bubbles.append(line.strip(" \"“”"))
+                continue
+            buffer.append(line)
+            if line.endswith(tuple(".?!…\"”")):
+                _flush_buffer()
+        _flush_buffer()
+        
+        if not bubbles and content:
+            bubbles = [content.strip()]
+        return [text for text in bubbles if len(text) > 1]
+
+    def _extract_texts_from_structure(self, data) -> list[str]:
+        """Recursively extract text fields from a JSON-like structure."""
+        texts: list[str] = []
+        if isinstance(data, str):
+            cleaned = data.strip()
+            if cleaned:
+                texts.append(cleaned)
+        elif isinstance(data, dict):
+            if "text" in data:
+                value = data["text"]
+                if isinstance(value, (str, int, float)):
+                    cleaned = str(value).strip()
+                    if cleaned:
+                        texts.append(cleaned)
+            # Support keys like "bubbles" or "items"
+            for value in data.values():
+                texts.extend(self._extract_texts_from_structure(value))
+        elif isinstance(data, list):
+            for item in data:
+                texts.extend(self._extract_texts_from_structure(item))
+        return texts
+
+    def _approximate_bubble_boxes(
+        self, count: int, width: int, height: int
+    ) -> list[list[int]]:
+        """When vision API doesn't return coordinates, approximate boxes in reading order."""
+        if count <= 0:
+            return []
+        
+        left_margin = int(width * 0.08)
+        right_margin = int(width * 0.92)
+        top_margin = int(height * 0.05)
+        bottom_margin = int(height * 0.05)
+        available_height = max(100, height - top_margin - bottom_margin)
+        slot_height = max(140, int(available_height / max(1, count)))
+        
+        boxes: list[list[int]] = []
+        for idx in range(count):
+            top = top_margin + idx * slot_height
+            bottom = top + slot_height - int(slot_height * 0.2)
+            if bottom > height - bottom_margin:
+                bottom = height - bottom_margin
+            if bottom - top < 80:
+                bottom = top + 80
+            boxes.append(
+                [
+                    left_margin,
+                    max(0, top),
+                    right_margin,
+                    min(height, bottom),
+                ]
+            )
+        return boxes
 
     def _analyze_from_text(
         self,
