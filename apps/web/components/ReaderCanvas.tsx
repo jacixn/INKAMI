@@ -7,9 +7,14 @@ import { cn } from "@/lib/utils";
 interface Props {
   controller: PlaybackController & { loading: boolean };
   variant?: "default" | "immersive";
+  isFullscreen?: boolean;
 }
 
-export default function ReaderCanvas({ controller, variant = "default" }: Props) {
+export default function ReaderCanvas({
+  controller,
+  variant = "default",
+  isFullscreen = false
+}: Props) {
   const page = controller.pages[controller.currentPageIndex];
   const immersive = variant === "immersive";
 
@@ -31,7 +36,7 @@ export default function ReaderCanvas({ controller, variant = "default" }: Props)
   const aspectRatio = viewWidth / viewHeight;
 
   return (
-    <section className={cn(immersive ? "" : "card")}>
+    <section className={cn(immersive ? "" : "card", isFullscreen && "bg-transparent")}>
       {!immersive && (
         <header className="mb-4 flex items-center gap-4 text-sm text-ink-100">
           <span>Page {page.page_index + 1}</span>
@@ -53,7 +58,8 @@ export default function ReaderCanvas({ controller, variant = "default" }: Props)
       <div
         className={cn(
           "relative mx-auto w-full overflow-hidden rounded-[28px] border border-white/10 bg-black/60",
-          immersive ? "max-w-[720px]" : "max-w-[520px]"
+          immersive ? "max-w-[720px]" : "max-w-[520px]",
+          isFullscreen && "max-w-none h-full rounded-none border-transparent bg-black"
         )}
         style={{ aspectRatio }}
       >

@@ -6,9 +6,16 @@ import type { PlaybackController } from "@/lib/types";
 interface Props {
   controller: PlaybackController;
   variant?: "card" | "overlay";
+  onToggleFullscreen?: () => void;
+  isFullscreen?: boolean;
 }
 
-export default function PlaybackControls({ controller, variant = "card" }: Props) {
+export default function PlaybackControls({
+  controller,
+  variant = "card",
+  onToggleFullscreen,
+  isFullscreen
+}: Props) {
   const wrapperClass =
     variant === "overlay"
       ? "rounded-[32px] border border-white/10 bg-black/70 px-5 py-4 flex flex-col gap-4 backdrop-blur-xl"
@@ -66,6 +73,26 @@ export default function PlaybackControls({ controller, variant = "card" }: Props
             />
           </svg>
         </button>
+        {onToggleFullscreen && (
+          <button
+            type="button"
+            onClick={onToggleFullscreen}
+            className={cn(
+              "ml-auto inline-flex items-center gap-2 rounded-full border border-white/20 px-4 py-2 text-sm font-semibold text-white transition hover:border-white/60",
+              variant === "overlay" && "bg-white/10 backdrop-blur"
+            )}
+          >
+            {isFullscreen ? "Exit full screen" : "Full screen"}
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <path
+                d="M5.5 3H3v2.5M10.5 3H13v2.5M5.5 13H3v-2.5M10.5 13H13v-2.5"
+                stroke="currentColor"
+                strokeWidth="1.4"
+                strokeLinecap="round"
+              />
+            </svg>
+          </button>
+        )}
       </div>
 
       <div className="flex flex-1 flex-col gap-2">

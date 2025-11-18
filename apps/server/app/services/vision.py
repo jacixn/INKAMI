@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import io
 import json
 import re
 from dataclasses import dataclass
@@ -75,16 +76,13 @@ class VisionService:
             return []
         
         try:
-            # Load and encode the FULL image
+            # Load and optionally split the image for long-scroll chapters
             from PIL import Image
+
             image = Image.open(image_path)
-            
-            import io
-            buffered = io.BytesIO()
-            image.save(buffered, format="PNG")
-            img_bytes = buffered.getvalue()
-            img_base64 = base64.b64encode(img_bytes).decode()
-            
+            width, height = image.size
+            segments = self._segment_vertical_ranges(height)
+
             prompt = (
                 "You are an expert manga letterer and voice director. "
                 "Look at the ENTIRE page and extract EVERY readable text element: speech bubbles, narration boxes, "
@@ -97,30 +95,82 @@ class VisionService:
                 '"tone":"playful|serious|questioning|dramatic|neutral", '
                 '"bubble_type":"dialogue|thought|narration|system|sfx" }.'
             )
-            
-            print("🤖 Calling GPT-4o-mini to detect and read ALL bubbles")
-            content = self._call_openai(prompt, img_base64, max_tokens=700)
-            if not content:
-                print("⚠️ Vision API returned no text")
-                return []
-            print(f"📝 Vision API response:\n{content}")
-            
-            entries = self._parse_detected_entries(content)
-            if not entries:
-                print("⚠️ Could not parse any text entries from vision response")
-                return []
-            
-            width, height = image.size
-            boxes = self._approximate_bubble_boxes(len(entries), width, height)
-            
+
+            print(
+                f"🧩 Vision segmentation: {len(segments)} slice(s) for page height {height}px"
+            )
+
             bubbles: list[tuple[list[int], str, CharacterAnalysis]] = []
-            for idx, entry in enumerate(entries):
-                text = entry.text
-                bubble_box = boxes[idx] if idx < len(boxes) else [80, 80, width - 80, height - 80]
-                analysis = self._analysis_from_entry(entry, text, bubble_box, height)
-                bubbles.append((bubble_box, text, analysis))
-                print(f"✨ Vision detected text #{idx + 1}: {text[:60]}")
-            
+            seen_signatures: set[tuple[str, int]] = set()
+            total_entries = 0
+
+            for seg_index, (start_y, end_y) in enumerate(segments, start=1):
+                crop = image.crop((0, start_y, width, end_y))
+                img_base64 = self._encode_image(crop)
+                segment_height = end_y - start_y
+                segment_prompt = prompt
+                if len(segments) > 1:
+                    segment_prompt += (
+                        f" You are looking only at segment {seg_index} of {len(segments)}, "
+                        f"covering vertical pixels {start_y} through {end_y}. "
+                        "Focus on text inside this slice only."
+                    )
+
+                print(
+                    f"🤖 Calling GPT-4o-mini for slice {seg_index}/{len(segments)} "
+                    f"(height {segment_height}px)"
+                )
+                content = self._call_openai(segment_prompt, img_base64, max_tokens=700)
+                if not content:
+                    print(f"⚠️ Vision API returned no text for slice {seg_index}")
+                    continue
+                print(f"📝 Vision response (slice {seg_index}):\n{content}")
+
+                entries = self._parse_detected_entries(content)
+                if not entries:
+                    print(f"⚠️ Could not parse text entries for slice {seg_index}")
+                    continue
+
+                slice_boxes = self._approximate_bubble_boxes(
+                    len(entries), width, segment_height
+                )
+                for idx, entry in enumerate(entries):
+                    text = entry.text.strip()
+                    if not text:
+                        continue
+                    box = (
+                        slice_boxes[idx]
+                        if idx < len(slice_boxes)
+                        else [80, 40, width - 80, segment_height - 40]
+                    )
+                    adjusted_box = [
+                        box[0],
+                        box[1] + start_y,
+                        box[2],
+                        box[3] + start_y,
+                    ]
+                    signature = self._entry_signature(text, adjusted_box)
+                    if signature in seen_signatures:
+                        continue
+                    seen_signatures.add(signature)
+
+                    analysis = self._analysis_from_entry(
+                        entry, text, adjusted_box, height
+                    )
+                    bubbles.append((adjusted_box, text, analysis))
+                    total_entries += 1
+                    print(
+                        f"✨ Vision detected text #{total_entries}: {text[:60]} "
+                        f"(slice {seg_index})"
+                    )
+
+            if not bubbles:
+                print("⚠️ Vision API did not return any usable text entries")
+            else:
+                print(
+                    f"✨ Vision API found {total_entries} text elements across {len(segments)} slice(s)"
+                )
+
             return bubbles
             
         except Exception as e:
@@ -145,12 +195,7 @@ class VisionService:
             image = Image.open(image_path)
             crop = image.crop((bubble_box[0], bubble_box[1], bubble_box[2], bubble_box[3]))
             
-            # Convert to base64
-            import io
-            buffered = io.BytesIO()
-            crop.save(buffered, format="PNG")
-            img_bytes = buffered.getvalue()
-            img_base64 = base64.b64encode(img_bytes).decode()
+            img_base64 = self._encode_image(crop)
             
             prompt = (
                 "Transcribe this manga speech bubble exactly as written. Preserve punctuation, "
@@ -479,6 +524,37 @@ class VisionService:
         punctuation_heavy = bool(re.fullmatch(r"[A-Z0-9!?~\\-]+", compact))
         repeated_letters = bool(re.search(r"(.)\1{2,}", compact))
         return uppercase_ratio >= 0.7 and (keyword_match or punctuation_heavy or repeated_letters)
+
+    def _encode_image(self, image) -> str:
+        buffered = io.BytesIO()
+        image.save(buffered, format="PNG")
+        return base64.b64encode(buffered.getvalue()).decode()
+
+    def _segment_vertical_ranges(
+        self, height: int, max_height: int = 2200, overlap: int = 200
+    ) -> list[tuple[int, int]]:
+        """Split tall/scrolling pages into overlapping slices for better OCR."""
+        if height <= max_height:
+            return [(0, height)]
+
+        overlap = min(overlap, max_height // 2)
+        step = max(400, max_height - overlap)
+
+        ranges: list[tuple[int, int]] = []
+        start = 0
+        while start < height:
+            end = min(height, start + max_height)
+            ranges.append((start, end))
+            if end >= height:
+                break
+            start = max(0, end - overlap)
+        return ranges
+
+    def _entry_signature(self, text: str, box: list[int]) -> tuple[str, int]:
+        normalized = re.sub(r"\s+", " ", text.strip().lower())
+        center_y = (box[1] + box[3]) // 2
+        bucket = center_y // 60
+        return normalized, bucket
 
     def _approximate_bubble_boxes(
         self, count: int, width: int, height: int
