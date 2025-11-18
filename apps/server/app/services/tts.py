@@ -138,8 +138,23 @@ class TTSService:
                 except Exception as e:
                     print(f"❌ OpenAI TTS failed: {type(e).__name__}: {str(e)}")
                     continue
-        print(f"⚠️ All TTS providers failed, using fallback for: {text[:50]}...")
-        return self._fallback_tts(text, voice_id)
+        if settings.openai_api_key:
+            print(
+                f"⚠️ Provider chain exhausted; forcing OpenAI TTS for: {text[:50]}..."
+            )
+            try:
+                result = self._synthesize_openai(text, voice_id)
+                print(
+                    f"✅ OpenAI forced fallback SUCCESS! Audio URL: {result.audio_url[:100]}"
+                )
+                return result
+            except Exception as e:
+                print(f"❌ OpenAI forced fallback failed: {type(e).__name__}: {str(e)}")
+                raise
+        print(
+            f"❌ No TTS providers succeeded and no OpenAI key configured for: {text[:50]}..."
+        )
+        raise RuntimeError("No TTS providers available")
 
     def _approximate_word_times(self, text: str) -> List[WordTime]:
         words = text.split()
