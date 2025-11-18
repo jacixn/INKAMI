@@ -32,7 +32,9 @@ export default function ImmersiveReader({ controller }: ImmersiveReaderProps) {
   useEffect(() => {
     if (!scrollRef.current || !activeBubble) return;
     const container = scrollRef.current;
-    const scale = container.scrollHeight / BASE_CANVAS_HEIGHT;
+    const baseHeight =
+      page && page.height && page.height > 0 ? page.height : BASE_CANVAS_HEIGHT;
+    const scale = container.scrollHeight / baseHeight;
     const target = Math.max(
       activeBubble.bubble_box[1] * scale - container.clientHeight / 3,
       0
@@ -154,6 +156,7 @@ export default function ImmersiveReader({ controller }: ImmersiveReaderProps) {
             variant="overlay"
             onToggleFullscreen={toggleFullscreen}
             isFullscreen={isFullscreen}
+            onRestart={controller.restart}
           />
         </div>
       </div>

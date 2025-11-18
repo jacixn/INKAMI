@@ -70,11 +70,11 @@ export function usePlaybackController(chapterId: string): ControllerState {
     setIsPlaying(false);
   }, [chapterId]);
 
-  const cancelSpeech = () => {
+  const cancelSpeech = useCallback(() => {
     if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
     window.speechSynthesis.cancel();
     speechRef.current = null;
-  };
+  }, []);
 
   const loadAudio = useCallback(
     async (bubbleId?: string) => {
@@ -184,7 +184,7 @@ export function usePlaybackController(chapterId: string): ControllerState {
     audioRef.current?.pause();
     audioRef.current = undefined;
     setIsPlaying(false);
-  }, []);
+  }, [cancelSpeech]);
 
   const advanceBubble = useCallback(
     (autoPlay: boolean) => {
@@ -238,7 +238,23 @@ export function usePlaybackController(chapterId: string): ControllerState {
       audioRef.current?.pause();
       cancelSpeech();
     };
-  }, []);
+  }, [cancelSpeech]);
+
+  const restart = useCallback(() => {
+    if (!pages.length) return;
+    const firstPage = pages[0];
+    const firstBubbleId =
+      firstPage.reading_order?.[0] ?? firstPage.items[0]?.bubble_id;
+    if (!firstBubbleId) return;
+    setCurrentPageIndex(0);
+    setCurrentBubbleId(firstBubbleId);
+    cancelSpeech();
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current = undefined;
+    }
+    void loadAudio(firstBubbleId);
+  }, [cancelSpeech, loadAudio, pages]);
 
   const combinedErrors = networkError ? [networkError, ...errors] : errors;
 
@@ -257,6 +273,7 @@ export function usePlaybackController(chapterId: string): ControllerState {
     prevBubble,
     setSpeed,
     setBubble,
+    restart,
     loading,
     chapter: data
   };

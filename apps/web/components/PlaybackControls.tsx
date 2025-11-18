@@ -8,13 +8,15 @@ interface Props {
   variant?: "card" | "overlay";
   onToggleFullscreen?: () => void;
   isFullscreen?: boolean;
+  onRestart?: () => void;
 }
 
 export default function PlaybackControls({
   controller,
   variant = "card",
   onToggleFullscreen,
-  isFullscreen
+  isFullscreen,
+  onRestart
 }: Props) {
   const wrapperClass =
     variant === "overlay"
@@ -73,12 +75,33 @@ export default function PlaybackControls({
             />
           </svg>
         </button>
+        {onRestart && (
+          <button
+            type="button"
+            onClick={onRestart}
+            className={cn(
+              "ml-2 inline-flex items-center gap-2 rounded-full border border-white/20 px-4 py-2 text-sm font-semibold text-white transition hover:border-white/60",
+              variant === "overlay" && "bg-white/10 backdrop-blur"
+            )}
+          >
+            Restart
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <path
+                d="M3.5 6v-3h3M12.5 10v3h-3M3.5 5.5a6 6 0 0 1 9.5-1.8M12.5 10.5a6 6 0 0 1-9.5 1.8"
+                stroke="currentColor"
+                strokeWidth="1.4"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </button>
+        )}
         {onToggleFullscreen && (
           <button
             type="button"
             onClick={onToggleFullscreen}
             className={cn(
-              "ml-auto inline-flex items-center gap-2 rounded-full border border-white/20 px-4 py-2 text-sm font-semibold text-white transition hover:border-white/60",
+              "ml-2 inline-flex items-center gap-2 rounded-full border border-white/20 px-4 py-2 text-sm font-semibold text-white transition hover:border-white/60",
               variant === "overlay" && "bg-white/10 backdrop-blur"
             )}
           >

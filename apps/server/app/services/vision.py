@@ -21,6 +21,7 @@ class CharacterAnalysis:
     voice_suggestion: str  # Which ElevenLabs voice to use
     stability: float  # 0.0-1.0, lower = more expressive
     similarity_boost: float  # 0.0-1.0, higher = more similar to original voice
+    style: float = 0.0  # 0.0-1.0 intensity for stylistic delivery
 
 
 @dataclass
@@ -251,6 +252,7 @@ class VisionService:
                 voice_suggestion=voice_id,
                 stability=0.3,
                 similarity_boost=0.85,
+                style=0.7,
             )
         return self._analyze_from_text(fallback_text, bubble_box, page_height)
 
@@ -263,7 +265,7 @@ class VisionService:
 
         voice_key = self._map_voice_key(gender, age, bubble_type)
         voice_id = self.VOICE_MAPPING.get(voice_key, self.VOICE_MAPPING["narrator"])
-        stability, similarity = self._emotion_to_settings(emotion)
+        stability, similarity, style = self._emotion_to_settings(emotion)
 
         character_label = bubble_type or f"{gender}_{age or 'unknown'}"
         print(
@@ -276,8 +278,9 @@ class VisionService:
             emotion=emotion,
             tone=tone,
             voice_suggestion=voice_id,
-            stability=stability,
-            similarity_boost=similarity,
+                stability=stability,
+                similarity_boost=similarity,
+                style=style,
         )
 
     def _map_voice_key(self, gender: str, age: str, bubble_type: str) -> str:
@@ -309,23 +312,30 @@ class VisionService:
             return "narrator"
         return "young_female"
 
-    def _emotion_to_settings(self, emotion: str) -> tuple[float, float]:
+    def _emotion_to_settings(self, emotion: str) -> tuple[float, float, float]:
         emotion = emotion.lower()
         stability = 0.5
         similarity = 0.75
-
+        style = 0.2
+        
         if emotion in {"angry", "furious", "excited", "ecstatic"}:
-            stability = 0.25
-            similarity = 0.7
+            stability = 0.22
+            similarity = 0.68
+            style = 0.85
         elif emotion in {"happy", "playful", "amused"}:
             stability = 0.35
+            similarity = 0.75
+            style = 0.6
         elif emotion in {"sad", "melancholy", "serious", "calm"}:
             stability = 0.65
-            similarity = 0.8
+            similarity = 0.82
+            style = 0.35
         elif emotion in {"scared", "nervous", "anxious"}:
             stability = 0.4
-
-        return stability, similarity
+            similarity = 0.72
+            style = 0.55
+        
+        return stability, similarity, style
 
     def _parse_detected_entries(self, content: str) -> list[VisionTextEntry]:
         if not content:
@@ -525,6 +535,44 @@ class VisionService:
         repeated_letters = bool(re.search(r"(.)\1{2,}", compact))
         return uppercase_ratio >= 0.7 and (keyword_match or punctuation_heavy or repeated_letters)
 
+    def _infer_gender_from_text(self, text: str) -> str | None:
+        """Heuristic gender detection from pronouns and honorifics."""
+        padded = f" {text} "
+        male_tokens = [
+            " he ",
+            " his ",
+            " him ",
+            " sir ",
+            " lord ",
+            " mr.",
+            " brother ",
+            " dad ",
+            " father ",
+            " king ",
+            " dude ",
+            " bro ",
+            " man ",
+        ]
+        female_tokens = [
+            " she ",
+            " her ",
+            " hers ",
+            " ma'am",
+            " lady ",
+            " miss ",
+            " mrs.",
+            " sister ",
+            " mom ",
+            " mother ",
+            " queen ",
+            " girl ",
+        ]
+        if any(token in padded for token in male_tokens):
+            return "male"
+        if any(token in padded for token in female_tokens):
+            return "female"
+        return None
+
     def _encode_image(self, image) -> str:
         buffered = io.BytesIO()
         image.save(buffered, format="PNG")
@@ -689,16 +737,46 @@ class VisionService:
             else:
                 voice_archetype = "young_female"
 
+        gender_hint = self._infer_gender_from_text(text_lower)
+        if not is_system_message and gender_hint:
+            if gender_hint == "male":
+                if has_child_keywords:
+                    voice_archetype = "child_male"
+                elif has_warrior_keywords or len(text) > 70 or "sir" in text_lower:
+                    voice_archetype = "adult_male"
+                else:
+                    voice_archetype = "young_male"
+            elif gender_hint == "female":
+                if has_child_keywords:
+                    voice_archetype = "child_female"
+                elif len(text) > 70 or "lady" in text_lower or "madam" in text_lower:
+                    voice_archetype = "adult_female"
+                else:
+                    voice_archetype = "young_female"
+
         # If the bubble sits in the top ~15% of the page and looks like UI text, treat as system
-        effective_height = page_height if page_height and page_height > 0 else (bubble_box[3] if len(bubble_box) > 3 else bubble_box[1] + 100)
+        effective_height = (
+            page_height
+            if page_height and page_height > 0
+            else (bubble_box[3] if len(bubble_box) > 3 else bubble_box[1] + 100)
+        )
         top_ratio = bubble_box[1] / max(1.0, effective_height)
         if top_ratio <= 0.15 and len(text) > 15 and not has_warrior_keywords:
             voice_archetype = "system"
             stability = max(stability, 0.6)
 
+        base_stability, similarity_boost, style = self._emotion_to_settings(emotion)
+        if stability == 0.5:
+            stability = base_stability
+        else:
+            stability = min(stability, base_stability)
+
         voice_id = self.VOICE_MAPPING.get(voice_archetype, "voice_narrator")
         
-        print(f"🎭 Text Analysis: {emotion} ({tone}) → {voice_id} [stability: {stability}]")
+        print(
+            f"🎭 Text Analysis: {emotion} ({tone}) → {voice_id} "
+            f"[stability: {stability}, style: {style}]"
+        )
         
         return CharacterAnalysis(
             character_type=voice_archetype,
@@ -706,7 +784,8 @@ class VisionService:
             tone=tone,
             voice_suggestion=voice_id,
             stability=stability,
-            similarity_boost=0.75,
+            similarity_boost=similarity_boost,
+            style=style,
         )
 
     def _is_ocr_gibberish(self, text: str) -> bool:
@@ -827,6 +906,7 @@ class VisionService:
             voice_suggestion="voice_narrator",
             stability=0.5,
             similarity_boost=0.75,
+            style=0.2,
         )
 
 

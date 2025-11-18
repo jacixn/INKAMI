@@ -65,8 +65,18 @@ class TTSService:
         },
     }
 
-    def synthesize(self, text: str, voice_id: str, stability: float = 0.5, similarity_boost: float = 0.75) -> TTSResult:
-        print(f"🔊 TTS Request: text='{text[:50]}...' voice={voice_id} stability={stability}")
+    def synthesize(
+        self,
+        text: str,
+        voice_id: str,
+        stability: float = 0.5,
+        similarity_boost: float = 0.75,
+        style: float | None = None,
+    ) -> TTSResult:
+        print(
+            f"🔊 TTS Request: text='{text[:50]}...' voice={voice_id} "
+            f"stability={stability} style={style if style is not None else 'default'}"
+        )
         provider_chain = [
             provider.strip()
             for provider in settings.tts_provider_priority.split(",")
@@ -78,7 +88,9 @@ class TTSService:
             if provider == "elevenlabs" and settings.elevenlabs_api_key:
                 try:
                     print(f"🎤 Attempting ElevenLabs synthesis...")
-                    result = self._synthesize_elevenlabs(text, voice_id, stability, similarity_boost)
+                    result = self._synthesize_elevenlabs(
+                        text, voice_id, stability, similarity_boost, style
+                    )
                     print(f"✅ ElevenLabs SUCCESS! Audio URL: {result.audio_url[:100]}")
                     return result
                 except Exception as e:
@@ -97,7 +109,14 @@ class TTSService:
             cursor += duration
         return payload
 
-    def _synthesize_elevenlabs(self, text: str, voice_id: str, stability: float = 0.5, similarity_boost: float = 0.75) -> TTSResult:
+    def _synthesize_elevenlabs(
+        self,
+        text: str,
+        voice_id: str,
+        stability: float = 0.5,
+        similarity_boost: float = 0.75,
+        style: float | None = None,
+    ) -> TTSResult:
         resolved_voice = self.ELEVEN_VOICE_MAP.get(voice_id, self.ELEVEN_VOICE_MAP["voice_narrator"])
         url = f"https://api.elevenlabs.io/v1/text-to-speech/{resolved_voice}"
         headers = {
@@ -114,6 +133,8 @@ class TTSService:
         override = self.VOICE_SETTINGS_OVERRIDES.get(voice_id)
         if override:
             voice_settings.update(override)
+        if style is not None and voice_id not in self.VOICE_SETTINGS_OVERRIDES:
+            voice_settings["style"] = max(0.0, min(1.0, style))
         
         payload = {
             "text": text,

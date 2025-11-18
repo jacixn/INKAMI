@@ -91,6 +91,7 @@ def process_chapter(
                 voice_suggestion="voice_narrator",
                 stability=0.5,
                 similarity_boost=0.75,
+                style=0.2,
             )
             vision_bubbles = [
                 ([100, 200, page_width - 100, 400], "No text detected on this page.", fallback_analysis)
@@ -107,10 +108,12 @@ def process_chapter(
                 stability = 0.7
                 similarity_boost = 0.85
                 speaker_label = "Narrator"
+                style = 0.25
             else:
                 assigned_voice = analysis.voice_suggestion
                 stability = analysis.stability
                 similarity_boost = analysis.similarity_boost
+                style = analysis.style
                 speaker_label = (
                     analysis.character_type.replace("_", " ").title()
                     if analysis.character_type
@@ -123,6 +126,7 @@ def process_chapter(
                 assigned_voice,
                 stability=stability,
                 similarity_boost=similarity_boost,
+                style=style,
             )
             
             items.append(
