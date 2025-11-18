@@ -51,6 +51,46 @@ def _strip_sfx_prefix(text: str) -> str:
     return re.sub(r"^(?:sfx|fx)\s*[:\-]\s*", "", text, flags=re.IGNORECASE).strip()
 
 
+SFX_KEYWORDS = {
+    "boom",
+    "bang",
+    "kraa",
+    "krak",
+    "wham",
+    "slam",
+    "snap",
+    "crash",
+    "thud",
+    "whoosh",
+    "fwoosh",
+    "fwip",
+    "swoosh",
+    "kshh",
+    "pow",
+    "zap",
+}
+
+
+def _looks_like_sfx_text(text: str) -> bool:
+    trimmed = text.strip()
+    if not trimmed:
+        return False
+    # short, mostly uppercase, or contains classic SFX keywords
+    words = trimmed.split()
+    letters = [c for c in trimmed if c.isalpha()]
+    upper_letters = [c for c in letters if c.isupper()]
+    upper_ratio = (len(upper_letters) / len(letters)) if letters else 0
+
+    if len(words) <= 3 and upper_ratio >= 0.8:
+        return True
+    lowered = trimmed.lower()
+    if any(keyword in lowered for keyword in SFX_KEYWORDS):
+        return True
+    if re.fullmatch(r"[A-Z!?]{2,}", trimmed.upper()):
+        return True
+    return False
+
+
 def _build_tone_hint(text: str, analysis: CharacterAnalysis) -> str | None:
     hints: list[str] = []
     trimmed = text.strip()
@@ -186,6 +226,9 @@ def process_chapter(
         for bubble_idx, (bubble_box, text, analysis) in enumerate(vision_bubbles):
             normalized_text = _normalize_text(text)
             bubble_type = _bubble_kind_from_analysis(analysis)
+            if processing_mode == "narrate" and bubble_type != "sfx":
+                if _looks_like_sfx_text(normalized_text):
+                    bubble_type = "sfx"
             character_key = (analysis.character_type or "").strip().lower()
             reuse_allowed = (
                 processing_mode != "narrate"
