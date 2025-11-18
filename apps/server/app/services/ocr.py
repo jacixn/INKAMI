@@ -134,33 +134,43 @@ class OCRService:
         ui_bubbles: List[DetectedBubble] = []
         
         def _extract_text_from_region(region: tuple[int, int, int, int]) -> str:
-            crop = image.crop(region).convert("L")
-            candidates: list[str] = []
+            try:
+                crop = image.crop(region).convert("L")
+                candidates: list[str] = []
 
-            def _add_candidate(text: str) -> None:
-                cleaned = self._clean_ui_text(text)
-                if cleaned:
-                    candidates.append(cleaned)
+                def _add_candidate(text: str) -> None:
+                    cleaned = self._clean_ui_text(text)
+                    if cleaned:
+                        candidates.append(cleaned)
 
-            for variant in self._generate_variants(crop):
-                for config in ("--psm 6 --oem 1", "--psm 7 --oem 1"):
-                    text = pytesseract.image_to_string(variant, config=config).strip()
-                    if text:
-                        _add_candidate(text)
-                data_text = self._text_from_data(variant)
-                if data_text:
-                    _add_candidate(data_text)
+                for variant in self._generate_variants(crop):
+                    for config in ("--psm 6 --oem 1", "--psm 7 --oem 1"):
+                        try:
+                            text = pytesseract.image_to_string(variant, config=config).strip()
+                            if text:
+                                _add_candidate(text)
+                        except Exception:
+                            continue
+                    try:
+                        data_text = self._text_from_data(variant)
+                        if data_text:
+                            _add_candidate(data_text)
+                    except Exception:
+                        continue
 
-            if not candidates:
+                if not candidates:
+                    return ""
+
+                scored = sorted(
+                    candidates,
+                    key=lambda text: self._score_ui_candidate(text),
+                    reverse=True,
+                )
+                top = scored[0]
+                return self._normalize_ui_text(top)
+            except Exception as e:
+                print(f"⚠️ UI OCR failed for region {region}: {e}")
                 return ""
-
-            scored = sorted(
-                candidates,
-                key=lambda text: self._score_ui_candidate(text),
-                reverse=True,
-            )
-            top = scored[0]
-            return self._normalize_ui_text(top)
         
         ui_keywords = ["YOU ARE", "CHARACTER", "SYSTEM", "QUEST", "MISSION", "STATUS"]
         
@@ -201,23 +211,19 @@ class OCRService:
 
     def _generate_variants(self, crop: Image.Image) -> list[Image.Image]:
         variants: list[Image.Image] = []
-        for angle in (0, -6, 6):
-            rotated = crop.rotate(angle, expand=True, fillcolor=255)
-            enlarged = rotated.resize(
-                (max(1, rotated.width * 2), max(1, rotated.height * 2)),
-                Image.BICUBIC,
-            )
-            base_variants = [
-                enlarged,
-                ImageOps.autocontrast(enlarged),
-                ImageEnhance.Contrast(enlarged).enhance(2.5),
-            ]
-            for base in base_variants:
-                variants.append(base)
-                variants.append(ImageOps.invert(base))
-                threshold = base.point(lambda px: 255 if px > 180 else 0)
-                variants.append(threshold)
-                variants.append(ImageOps.invert(threshold))
+        # Simpler, faster variant generation
+        enlarged = crop.resize(
+            (max(1, crop.width * 2), max(1, crop.height * 2)),
+            Image.BICUBIC,
+        )
+        variants.append(enlarged)
+        variants.append(ImageOps.autocontrast(enlarged))
+        variants.append(ImageOps.invert(enlarged))
+        contrast = ImageEnhance.Contrast(enlarged).enhance(2.5)
+        variants.append(contrast)
+        variants.append(ImageOps.invert(contrast))
+        threshold = enlarged.point(lambda px: 255 if px > 180 else 0)
+        variants.append(threshold)
         return variants
 
     def _text_from_data(self, image: Image.Image) -> str:
