@@ -102,35 +102,68 @@ class VisionService:
                 f"🧩 Vision segmentation: {len(segments)} slice(s) for page height {height}px"
             )
 
+            jobs: list[dict] = []
+            full_prompt = (
+                prompt
+                + " Consider the entire page at once so dialogues stay in context."
+            )
+            jobs.append(
+                {
+                    "label": "full page",
+                    "start_y": 0,
+                    "end_y": height,
+                    "prompt": full_prompt,
+                    "img_base64": self._encode_image(image),
+                    "segment_height": height,
+                }
+            )
+
+            if len(segments) > 1:
+                for seg_index, (start_y, end_y) in enumerate(segments, start=1):
+                    crop = image.crop((0, start_y, width, end_y))
+                    img_base64 = self._encode_image(crop)
+                    segment_height = end_y - start_y
+                    segment_prompt = (
+                        prompt
+                        + f" You are looking only at segment {seg_index} of {len(segments)}, "
+                        f"covering vertical pixels {start_y} through {end_y}. "
+                        "Focus on text inside this slice only."
+                    )
+                    jobs.append(
+                        {
+                            "label": f"slice {seg_index}/{len(segments)}",
+                            "start_y": start_y,
+                            "end_y": end_y,
+                            "prompt": segment_prompt,
+                            "img_base64": img_base64,
+                            "segment_height": segment_height,
+                        }
+                    )
+
             bubbles: list[tuple[list[int], str, CharacterAnalysis]] = []
             seen_signatures: set[tuple[str, int]] = set()
             total_entries = 0
 
-            for seg_index, (start_y, end_y) in enumerate(segments, start=1):
-                crop = image.crop((0, start_y, width, end_y))
-                img_base64 = self._encode_image(crop)
-                segment_height = end_y - start_y
-                segment_prompt = prompt
-                if len(segments) > 1:
-                    segment_prompt += (
-                        f" You are looking only at segment {seg_index} of {len(segments)}, "
-                        f"covering vertical pixels {start_y} through {end_y}. "
-                        "Focus on text inside this slice only."
-                    )
+            for job in jobs:
+                label = job["label"]
+                start_y = job["start_y"]
+                end_y = job["end_y"]
+                segment_height = job["segment_height"]
+                segment_prompt = job["prompt"]
+                img_base64 = job["img_base64"]
 
                 print(
-                    f"🤖 Calling GPT-4o-mini for slice {seg_index}/{len(segments)} "
-                    f"(height {segment_height}px)"
+                    f"🤖 Calling GPT-4o-mini for {label} (height {segment_height}px)"
                 )
                 content = self._call_openai(segment_prompt, img_base64, max_tokens=700)
                 if not content:
-                    print(f"⚠️ Vision API returned no text for slice {seg_index}")
+                    print(f"⚠️ Vision API returned no text for {label}")
                     continue
-                print(f"📝 Vision response (slice {seg_index}):\n{content}")
+                print(f"📝 Vision response ({label}):\n{content}")
 
                 entries = self._parse_detected_entries(content)
                 if not entries:
-                    print(f"⚠️ Could not parse text entries for slice {seg_index}")
+                    print(f"⚠️ Could not parse text entries for {label}")
                     continue
 
                 slice_boxes = self._approximate_bubble_boxes(
@@ -163,14 +196,14 @@ class VisionService:
                     total_entries += 1
                     print(
                         f"✨ Vision detected text #{total_entries}: {text[:60]} "
-                        f"(slice {seg_index})"
+                        f"({label})"
                     )
 
             if not bubbles:
                 print("⚠️ Vision API did not return any usable text entries")
             else:
                 print(
-                    f"✨ Vision API found {total_entries} text elements across {len(segments)} slice(s)"
+                    f"✨ Vision API found {total_entries} text elements across {len(jobs)} request(s)"
                 )
 
             return bubbles
