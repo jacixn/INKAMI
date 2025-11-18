@@ -30,8 +30,7 @@ const demoChapter: ChapterPayload = {
           speaker_name: "Young Woman",
           voice_id: "voice_young_f",
           text: "We turned this entire chapter into audio in under one minute.",
-          audio_url:
-            "https://cdn.pixabay.com/download/audio/2022/03/12/audio_263318cc46.mp3?filename=glow-ambient-11046.mp3",
+          audio_url: "",
           word_times: [
             { word: "We", start: 0, end: 0.35 },
             { word: "turned", start: 0.35, end: 0.75 },
@@ -55,8 +54,7 @@ const demoChapter: ChapterPayload = {
           speaker_name: "Narrator",
           voice_id: "voice_narrator",
           text: "Inkami understands panels, characters, and emotion to pick the right voice.",
-          audio_url:
-            "https://cdn.pixabay.com/download/audio/2022/03/15/audio_7a93ce2c98.mp3?filename=mysterious-cinematic-11097.mp3",
+          audio_url: "",
           word_times: [
             { word: "Inkami", start: 0, end: 0.6 },
             { word: "understands", start: 0.6, end: 1.2 },
@@ -88,8 +86,7 @@ const demoChapter: ChapterPayload = {
           speaker_name: "Young Man",
           voice_id: "voice_young_m",
           text: "Tap any bubble and I will replay it instantly.",
-          audio_url:
-            "https://cdn.pixabay.com/download/audio/2021/08/08/audio_64cc85ee06.mp3?filename=futuristic-beat-9736.mp3",
+          audio_url: "",
           word_times: [
             { word: "Tap", start: 0, end: 0.35 },
             { word: "any", start: 0.35, end: 0.55 },
@@ -111,8 +108,7 @@ const demoChapter: ChapterPayload = {
           speaker_name: "Narrator",
           voice_id: "voice_narrator",
           text: "Karaoke-style highlights stay synced with the audio stream.",
-          audio_url:
-            "https://cdn.pixabay.com/download/audio/2022/01/11/audio_1e0bd678ac.mp3?filename=deep-ambient-ambient-9947.mp3",
+          audio_url: "",
           word_times: [
             { word: "Karaoke-style", start: 0, end: 0.8 },
             { word: "highlights", start: 0.8, end: 1.3 },
