@@ -398,14 +398,24 @@ class VisionService:
             candidate = candidate.strip(" \"“”'")
             return candidate
         
-        meta_patterns = [
-            r"(?i)speaker(?:_gender|\s+gender)?\s*[:=]\s*['\"A-Za-z\s]+",
-            r"(?i)speaker(?:_age|\s+age)?\s*[:=]\s*['\"A-Za-z\s]+",
-            r"(?i)bubble(?:_type|\s+type)?\s*[:=]\s*['\"A-Za-z\s]+",
-            r"(?i)emotion\s*[:=]\s*['\"A-Za-z\s]+",
-            r"(?i)tone\s*[:=]\s*['\"A-Za-z\s]+",
+        meta_fields = [
+            "speaker gender",
+            "speaker_gender",
+            "gender",
+            "speaker age",
+            "speaker_age",
+            "age",
+            "bubble type",
+            "bubble_type",
+            "emotion",
+            "tone",
         ]
-        for pattern in meta_patterns:
+        for field in meta_fields:
+            pattern = (
+                r"(?i)\b"
+                + re.escape(field)
+                + r"\b\s*(?:[:=\-]\s*)?(?:\"[^\"]*\"|'[^']*'|[A-Za-z ]+)"
+            )
             line = re.sub(pattern, "", line)
         
         line = re.sub(r"\s{2,}", " ", line)
