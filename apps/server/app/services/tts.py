@@ -32,7 +32,7 @@ class TTSService:
         
         # Special voices
         "voice_narrator": "56bWURjYFHyYyVf490Dp",  # User-selected female narrator
-        "voice_narrator_male": "ErXwobaYiN019PkySvjV",  # Antoni - friendly male narrator
+        "voice_narrator_male": "6pVydnYcVtMsrrSeUKs6",  # User-selected male narrator
         "voice_system": "CwhRBWXzGAHq8TQ4Fs17",  # Roger - calm, precise system tone
         "voice_sfx": "N2lVS1w4EtoT3dr4eOWO",  # Callum - punchy FX cues
     }
