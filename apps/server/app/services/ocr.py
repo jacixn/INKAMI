@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Sequence
 
-from PIL import Image, ImageEnhance
+from PIL import Image, ImageEnhance, ImageOps
 import pytesseract
 from pytesseract import Output
 
@@ -132,24 +132,38 @@ class OCRService:
         
         def _extract_text_from_region(region: tuple[int, int, int, int]) -> str:
             crop = image.crop(region).convert("L")
-            enhanced = ImageEnhance.Contrast(crop).enhance(2.0)
-            text = pytesseract.image_to_string(enhanced, config="--psm 6").strip()
-            if not text or len(text) < 5:
-                text = pytesseract.image_to_string(enhanced, config="--psm 7").strip()
-            return text
+            candidates: list[str] = []
+            for angle in (0, -8, 8):
+                rotated = crop.rotate(angle, expand=True, fillcolor=255)
+                enhanced = ImageEnhance.Contrast(rotated).enhance(2.5)
+                for variant in (enhanced, ImageOps.invert(enhanced)):
+                    text = pytesseract.image_to_string(variant, config="--psm 6").strip()
+                    if not text or len(text) < 5:
+                        text = pytesseract.image_to_string(variant, config="--psm 7").strip()
+                    if text:
+                        candidates.append(text.strip())
+            if not candidates:
+                return ""
+            return max(candidates, key=len)
         
-        # Check middle region for UI panels (middle 40% of image)
-        middle_region = (int(width * 0.3), int(height * 0.3), int(width * 0.7), int(height * 0.7))
-        middle_text = _extract_text_from_region(middle_region)
-        if middle_text and len(middle_text) > 10:
+        ui_keywords = ["YOU ARE", "CHARACTER", "SYSTEM", "QUEST", "MISSION", "STATUS"]
+        
+        # Focused region on the right side where panels usually appear
+        panel_region = (
+            int(width * 0.45),
+            int(height * 0.25),
+            int(width * 0.95),
+            int(height * 0.75),
+        )
+        panel_text = _extract_text_from_region(panel_region)
+        if panel_text and len(panel_text) > 8:
             # Check if this is likely UI text (contains system keywords)
-            ui_keywords = ["YOU ARE", "CHARACTER", "SYSTEM", "QUEST", "MISSION", "STATUS"]
-            if any(keyword in middle_text.upper() for keyword in ui_keywords):
+            if any(keyword in panel_text.upper() for keyword in ui_keywords):
                 ui_bubbles.append(
                     DetectedBubble(
-                        bubble_id="ui_middle",
-                        box=list(middle_region),
-                        text=middle_text,
+                        bubble_id="ui_panel",
+                        box=list(panel_region),
+                        text=panel_text,
                         kind="narration",
                     )
                 )
