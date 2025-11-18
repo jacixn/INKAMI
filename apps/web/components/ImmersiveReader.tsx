@@ -30,17 +30,59 @@ export default function ImmersiveReader({ controller }: ImmersiveReaderProps) {
   }, [page, controller.currentBubbleId]);
 
   useEffect(() => {
-    if (!scrollRef.current || !activeBubble) return;
+    if (!scrollRef.current || !activeBubble || !page) return;
     const container = scrollRef.current;
     const baseHeight =
       page && page.height && page.height > 0 ? page.height : BASE_CANVAS_HEIGHT;
     const scale = container.scrollHeight / baseHeight;
+    
+    // Calculate bubble center position
+    const bubbleTop = activeBubble.bubble_box[1] * scale;
+    const bubbleBottom = activeBubble.bubble_box[3] * scale;
+    const bubbleCenter = (bubbleTop + bubbleBottom) / 2;
+    
+    // Center the bubble in the viewport
+    const viewportCenter = container.clientHeight / 2;
     const target = Math.max(
-      activeBubble.bubble_box[1] * scale - container.clientHeight / 3,
+      bubbleCenter - viewportCenter,
       0
     );
-    container.scrollTo({ top: target, behavior: "smooth" });
-  }, [activeBubble, controller.currentPageIndex]);
+    
+    // Custom smooth scroll with longer duration for a more relaxed, enjoyable experience
+    const smoothScrollTo = (element: HTMLElement, target: number, duration: number = 1200) => {
+      const start = element.scrollTop;
+      const distance = target - start;
+      const startTime = performance.now();
+      
+      // Easing function for smooth deceleration (ease-out)
+      const easeOutCubic = (t: number): number => {
+        return 1 - Math.pow(1 - t, 3);
+      };
+      
+      const animateScroll = (currentTime: number) => {
+        const elapsed = currentTime - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+        const eased = easeOutCubic(progress);
+        
+        element.scrollTop = start + distance * eased;
+        
+        if (progress < 1) {
+          requestAnimationFrame(animateScroll);
+        }
+      };
+      
+      requestAnimationFrame(animateScroll);
+    };
+    
+    // Small delay to let current bubble finish before scrolling
+    const timeoutId = setTimeout(() => {
+      smoothScrollTo(container, target, 1200); // 1.2 second smooth scroll
+    }, 150);
+    
+    return () => {
+      clearTimeout(timeoutId);
+    };
+  }, [activeBubble, controller.currentPageIndex, page]);
 
   const clearHideTimer = useCallback(() => {
     if (hideTimerRef.current) {
@@ -113,7 +155,8 @@ export default function ImmersiveReader({ controller }: ImmersiveReaderProps) {
   const controlsHidden = isFullscreen && !controlsVisible;
   const scrollClasses = cn(
     "w-full overflow-y-auto scroll-smooth px-4 py-6 sm:px-8",
-    isFullscreen ? "h-screen" : "h-[calc(100vh-320px)]"
+    isFullscreen ? "h-screen" : "h-[calc(100vh-320px)]",
+    "[scroll-behavior:smooth]"
   );
   const containerClasses = cn(
     "relative rounded-[36px] border border-white/10 bg-white/[0.04] shadow-[0_40px_120px_rgba(0,0,0,0.65)]",
