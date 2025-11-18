@@ -197,6 +197,16 @@ class VisionService:
             metadata_analysis = self._analysis_from_metadata(entry)
             if metadata_analysis:
                 return metadata_analysis
+        if self._looks_like_sfx(fallback_text):
+            voice_id = self.VOICE_MAPPING.get("sfx", self.VOICE_MAPPING["narrator"])
+            return CharacterAnalysis(
+                character_type="sfx_autodetect",
+                emotion="neutral",
+                tone="impact",
+                voice_suggestion=voice_id,
+                stability=0.3,
+                similarity_boost=0.85,
+            )
         return self._analyze_from_text(fallback_text, bubble_box, page_height)
 
     def _analysis_from_metadata(self, entry: VisionTextEntry) -> CharacterAnalysis | None:
@@ -434,6 +444,41 @@ class VisionService:
                     lines = lines[:-1]
             stripped = "\n".join(lines).strip()
         return stripped
+
+    def _looks_like_sfx(self, text: str) -> bool:
+        if not text:
+            return False
+        cleaned = text.strip()
+        if not cleaned:
+            return False
+        compact = cleaned.replace(" ", "")
+        if len(compact) > 20:
+            return False
+        letters = [char for char in cleaned if char.isalpha()]
+        if not letters:
+            return False
+        uppercase_ratio = sum(1 for char in letters if char.isupper()) / len(letters)
+        keywords = {
+            "boom",
+            "bang",
+            "pow",
+            "wham",
+            "slam",
+            "crash",
+            "clang",
+            "clank",
+            "snap",
+            "whoosh",
+            "thud",
+            "zap",
+            "kaboom",
+            "zing",
+        }
+        tokens = [token for token in re.split(r"[^a-zA-Z]+", cleaned.lower()) if token]
+        keyword_match = any(token in keywords for token in tokens)
+        punctuation_heavy = bool(re.fullmatch(r"[A-Z0-9!?~\\-]+", compact))
+        repeated_letters = bool(re.search(r"(.)\1{2,}", compact))
+        return uppercase_ratio >= 0.7 and (keyword_match or punctuation_heavy or repeated_letters)
 
     def _approximate_bubble_boxes(
         self, count: int, width: int, height: int
