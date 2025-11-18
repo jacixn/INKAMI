@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Sequence
 
-from PIL import Image
+from PIL import Image, ImageEnhance
 import pytesseract
 from pytesseract import Output
 
@@ -130,9 +130,17 @@ class OCRService:
         width, height = image.size
         ui_bubbles: List[DetectedBubble] = []
         
+        def _extract_text_from_region(region: tuple[int, int, int, int]) -> str:
+            crop = image.crop(region).convert("L")
+            enhanced = ImageEnhance.Contrast(crop).enhance(2.0)
+            text = pytesseract.image_to_string(enhanced, config="--psm 6").strip()
+            if not text or len(text) < 5:
+                text = pytesseract.image_to_string(enhanced, config="--psm 7").strip()
+            return text
+        
         # Check middle region for UI panels (middle 40% of image)
         middle_region = (int(width * 0.3), int(height * 0.3), int(width * 0.7), int(height * 0.7))
-        middle_text = self.extract(image_path, middle_region).strip()
+        middle_text = _extract_text_from_region(middle_region)
         if middle_text and len(middle_text) > 10:
             # Check if this is likely UI text (contains system keywords)
             ui_keywords = ["YOU ARE", "CHARACTER", "SYSTEM", "QUEST", "MISSION", "STATUS"]
@@ -148,7 +156,7 @@ class OCRService:
         
         # Check bottom region for UI text (bottom 20% of image)
         bottom_region = (0, int(height * 0.8), width, height)
-        bottom_text = self.extract(image_path, bottom_region).strip()
+        bottom_text = _extract_text_from_region(bottom_region)
         if bottom_text and len(bottom_text) > 10:
             ui_bubbles.append(
                 DetectedBubble(

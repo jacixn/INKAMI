@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import uuid
 from pathlib import Path
+import re
 from typing import Iterable, TypedDict
 
 from app.models.schemas import BubbleItem, ChapterPayload, PagePayload, WordTime
@@ -44,6 +45,13 @@ def _voice_for_bubble(index: int) -> str:
     return palette[index % len(palette)]
 
 
+def _normalize_text(text: str) -> str:
+    cleaned = text.replace("|", " ")
+    cleaned = cleaned.replace("\n", " ")
+    cleaned = re.sub(r"\s+", " ", cleaned)
+    return cleaned.strip()
+
+
 def _bubble_to_item(
     chapter_id: str,
     page_index: int,
@@ -63,13 +71,14 @@ def _bubble_to_item(
         page_height=page_height,
     )
     assigned_voice = analysis.voice_suggestion
+    normalized_text = _normalize_text(bubble.text)
     
     # Generate TTS with emotion parameters from AI analysis
     tts_result = tts_service.synthesize(
-        bubble.text, 
+        normalized_text,
         assigned_voice,
         stability=analysis.stability,
-        similarity_boost=analysis.similarity_boost
+        similarity_boost=analysis.similarity_boost,
     )
     
     return BubbleItem(
@@ -80,7 +89,7 @@ def _bubble_to_item(
         speaker_id=speaker_id,
         speaker_name=bubble.speaker_name,
         voice_id=assigned_voice,
-        text=bubble.text,
+        text=normalized_text,
         audio_url=tts_result.audio_url,
         word_times=[WordTime(**word.model_dump()) for word in tts_result.word_times],
     )
@@ -146,10 +155,10 @@ def process_chapter(chapter_id: str, files: list[ChapterFile], job_id: str | Non
         for bubble in detected:
             # Expand the box slightly to capture edge text
             expanded_box = [
-                max(0, bubble.box[0] - 10),
-                max(0, bubble.box[1] - 10),
-                min(page_width, bubble.box[2] + 10),
-                min(page_height, bubble.box[3] + 10)
+                max(0, bubble.box[0] - 20),
+                max(0, bubble.box[1] - 20),
+                min(page_width, bubble.box[2] + 60),
+                min(page_height, bubble.box[3] + 60),
             ]
             refined = ocr_service.extract(image_path, expanded_box).strip()
             if not refined:
