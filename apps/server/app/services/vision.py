@@ -21,6 +21,7 @@ class CharacterAnalysis:
     voice_suggestion: str  # Which ElevenLabs voice to use
     stability: float  # 0.0-1.0, lower = more expressive
     similarity_boost: float  # 0.0-1.0, higher = more similar to original voice
+    style: float = 0.2  # 0.0-1.0, higher = more dramatic/style weight
     style: float = 0.0  # 0.0-1.0 intensity for stylistic delivery
 
 
@@ -278,9 +279,9 @@ class VisionService:
             emotion=emotion,
             tone=tone,
             voice_suggestion=voice_id,
-                stability=stability,
-                similarity_boost=similarity,
-                style=style,
+            stability=stability,
+            similarity_boost=similarity,
+            style=style,
         )
 
     def _map_voice_key(self, gender: str, age: str, bubble_type: str) -> str:

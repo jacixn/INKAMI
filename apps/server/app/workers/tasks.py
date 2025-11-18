@@ -13,7 +13,7 @@ from app.models.schemas import (
 )
 from app.services.pipeline import chapter_store
 from app.services.speaker import speaker_linker
-from app.services.tts import tts_service
+from app.services.tts import TTSResult, tts_service
 from app.services.vision import CharacterAnalysis, vision_service
 
 
@@ -47,6 +47,10 @@ def _normalize_text(text: str) -> str:
     return cleaned.strip()
 
 
+def _strip_sfx_prefix(text: str) -> str:
+    return re.sub(r"^(?:sfx|fx)\s*[:\-]\s*", "", text, flags=re.IGNORECASE).strip()
+
+
 def _bubble_kind_from_analysis(analysis: CharacterAnalysis) -> str:
     descriptor = (analysis.character_type or "").lower()
     if any(keyword in descriptor for keyword in ("system", "ui", "computer", "panel")):
@@ -71,6 +75,7 @@ def process_chapter(
 
     pages: list[PagePayload] = []
     total_files = len(files)
+    character_voice_memory: dict[str, tuple[str, float, float, float]] = {}
     for index, file_info in enumerate(files):
         page_width = file_info.get("width") or 1080
         page_height = file_info.get("height") or 1920
@@ -103,6 +108,13 @@ def process_chapter(
         for bubble_idx, (bubble_box, text, analysis) in enumerate(vision_bubbles):
             normalized_text = _normalize_text(text)
             bubble_type = _bubble_kind_from_analysis(analysis)
+            character_key = (analysis.character_type or "").strip().lower()
+            reuse_allowed = (
+                processing_mode != "narrate"
+                and character_key
+                and character_key not in {"unknown", "sfx_autodetect"}
+                and bubble_type not in {"sfx", "narration"}
+            )
             if processing_mode == "narrate":
                 assigned_voice = "voice_narrator"
                 stability = 0.7
@@ -110,24 +122,44 @@ def process_chapter(
                 speaker_label = "Narrator"
                 style = 0.25
             else:
-                assigned_voice = analysis.voice_suggestion
-                stability = analysis.stability
-                similarity_boost = analysis.similarity_boost
-                style = analysis.style
+                if reuse_allowed and character_key in character_voice_memory:
+                    cached_voice, cached_stability, cached_similarity, cached_style = (
+                        character_voice_memory[character_key]
+                    )
+                    assigned_voice = cached_voice
+                    stability = cached_stability
+                    similarity_boost = cached_similarity
+                    style = cached_style
+                else:
+                    assigned_voice = analysis.voice_suggestion
+                    stability = analysis.stability
+                    similarity_boost = analysis.similarity_boost
+                    style = analysis.style
+                    if reuse_allowed and assigned_voice:
+                        character_voice_memory[character_key] = (
+                            assigned_voice,
+                            stability,
+                            similarity_boost,
+                            style,
+                        )
                 speaker_label = (
                     analysis.character_type.replace("_", " ").title()
                     if analysis.character_type
                     else None
                 )
             
-            # Generate TTS with emotion parameters
-            tts_result = tts_service.synthesize(
-                normalized_text,
-                assigned_voice,
-                stability=stability,
-                similarity_boost=similarity_boost,
-                style=style,
-            )
+            if bubble_type == "sfx":
+                normalized_text = _strip_sfx_prefix(normalized_text)
+                tts_result = TTSResult(audio_url="", word_times=[])
+            else:
+                # Generate TTS with emotion parameters
+                tts_result = tts_service.synthesize(
+                    normalized_text,
+                    assigned_voice,
+                    stability=stability,
+                    similarity_boost=similarity_boost,
+                    style=style,
+                )
             
             items.append(
                 BubbleItem(

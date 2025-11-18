@@ -151,7 +151,7 @@ export function usePlaybackController(chapterId: string): ControllerState {
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [bubbleMap, speed]
+    [bubbleMap, speed, cancelSpeech]
   );
 
   const setBubble = useCallback(
