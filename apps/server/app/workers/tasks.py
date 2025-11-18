@@ -56,7 +56,12 @@ def _bubble_to_item(
     speaker_id = f"{chapter_id[:6]}_speaker_{page_index}_{bubble_index}"
     
     # Use AI vision to analyze the bubble and determine voice/emotion
-    analysis = vision_service.analyze_bubble(image_path, bubble.text, list(bubble.box))
+    analysis = vision_service.analyze_bubble(
+        image_path=image_path,
+        text=bubble.text,
+        bubble_box=list(bubble.box),
+        page_height=page_height,
+    )
     assigned_voice = analysis.voice_suggestion
     
     # Generate TTS with emotion parameters from AI analysis
@@ -134,6 +139,15 @@ def process_chapter(chapter_id: str, files: list[ChapterFile], job_id: str | Non
                 ]
             else:
                 detected = [_fallback_bubble(page_width, page_height)]
+
+        # Refine each detected bubble text using a targeted OCR pass over its bounds.
+        for bubble in detected:
+            refined = ocr_service.extract(image_path, bubble.box).strip()
+            if not refined:
+                continue
+            current = bubble.text.strip()
+            if len(refined) > len(current) + 2 or ("?" in refined and "?" not in current):
+                bubble.text = refined
 
         items: list[BubbleItem] = []
         for bubble_idx, bubble in enumerate(detected):

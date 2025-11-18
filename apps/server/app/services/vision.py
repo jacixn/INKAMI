@@ -34,17 +34,32 @@ class VisionService:
         "narrator": "voice_narrator",
     }
 
-    def analyze_bubble(self, image_path: Path, text: str, bubble_box: list[int]) -> CharacterAnalysis:
+    def analyze_bubble(
+        self,
+        image_path: Path,
+        text: str,
+        bubble_box: list[int],
+        page_height: int | float | None = None,
+    ) -> CharacterAnalysis:
         """Analyze a speech bubble and determine character emotion and voice."""
         
         # For now, use smart text analysis to determine emotion and voice
         # This is a temporary solution until we get vision API working properly
-        return self._analyze_from_text(text, bubble_box)
+        return self._analyze_from_text(text, bubble_box, page_height)
 
-    def _analyze_from_text(self, text: str, bubble_box: list[int]) -> CharacterAnalysis:
+    def _analyze_from_text(
+        self,
+        text: str,
+        bubble_box: list[int],
+        page_height: int | float | None,
+    ) -> CharacterAnalysis:
         """Analyze text content to determine character type and emotion."""
         
         text_lower = text.lower()
+        alpha_chars = [char for char in text if char.isalpha()]
+        upper_ratio = (
+            sum(1 for char in alpha_chars if char.isupper()) / max(1, len(alpha_chars))
+        )
         
         # Detect emotion from text patterns
         emotion = "neutral"
@@ -106,8 +121,9 @@ class VisionService:
             voice_archetype = "young_female_warm" if "?" in text else "male_stoic"
 
         # If the bubble sits in the top ~15% of the page and looks like UI text, treat as narrator/system.
-        page_height = bubble_box[3] if len(bubble_box) > 3 else bubble_box[1] + 100
-        if (bubble_box[1] / max(1, page_height)) <= 0.15 and len(text) > 15:
+        effective_height = page_height if page_height and page_height > 0 else (bubble_box[3] if len(bubble_box) > 3 else bubble_box[1] + 100)
+        top_ratio = bubble_box[1] / max(1.0, effective_height)
+        if top_ratio <= 0.15 and len(text) > 15:
             voice_archetype = "narrator"
             stability = max(stability, 0.6)
 
