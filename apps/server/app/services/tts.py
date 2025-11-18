@@ -26,7 +26,7 @@ class TTSService:
         "voice_adult_f": "AZnzlk1XvdvUeBnXmlld",  # Bella - mature woman
         
         # Male voices (child → young → adult)
-        "voice_child_m": "IKne3meq5aSn9XLyUdCD",  # Charlie - energetic teen boy
+        "voice_child_m": "SOYHLrjzK2X1ezoPC6cr",  # Harry - natural middle-school boy
         "voice_young_m": "yoZ06aMxZJJ28mfd3POQ",  # Adam - realistic heroic lead
         "voice_adult_m": "TxGEqnHWrfWFTfGW9XjX",  # Josh - mature deep voice
         

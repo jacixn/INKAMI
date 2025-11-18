@@ -21,7 +21,7 @@ const voices = [
     id: "voice_child_m",
     name: "Young Boy",
     tone: "Child character",
-    traits: "Playful, slightly raspy, believable kid"
+    traits: "Natural middle-school tone, gentle energy"
   },
   {
     id: "voice_young_m",
