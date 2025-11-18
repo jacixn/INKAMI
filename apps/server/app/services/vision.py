@@ -25,6 +25,8 @@ class CharacterAnalysis:
 class VisionService:
     """Service for analyzing manga/manhwa images with AI vision."""
 
+    CHAT_URL = "https://api.deepseek.com/v1/chat/completions"
+
     VOICE_MAPPING = {
         # Female character archetypes
         "child_female": "voice_child_f",
@@ -60,7 +62,6 @@ class VisionService:
             img_base64 = base64.b64encode(img_bytes).decode()
             
             # Call DeepSeek Vision API to find and read ALL text
-            url = "https://api.deepseek.com/chat/completions"
             headers = {
                 "Authorization": f"Bearer {settings.deepseek_api_key}",
                 "Content-Type": "application/json",
@@ -95,8 +96,13 @@ Do NOT add descriptions or commentary—only the raw text content."""
             }
             
             print("🤖 Calling DeepSeek Vision API to detect and read ALL bubbles")
-            response = requests.post(url, headers=headers, json=payload, timeout=30)
-            response.raise_for_status()
+            response = requests.post(self.CHAT_URL, headers=headers, json=payload, timeout=30)
+            try:
+                response.raise_for_status()
+            except requests.HTTPError as exc:
+                body = response.text if response is not None else ""
+                print(f"❌ Vision HTTPError {response.status_code if response else '??'}: {body[:500]}")
+                raise exc
             result = response.json()
             
             if "choices" not in result or len(result["choices"]) == 0:
@@ -154,7 +160,6 @@ Do NOT add descriptions or commentary—only the raw text content."""
             img_base64 = base64.b64encode(img_bytes).decode()
             
             # Call DeepSeek Vision API
-            url = "https://api.deepseek.com/chat/completions"
             headers = {
                 "Authorization": f"Bearer {settings.deepseek_api_key}",
                 "Content-Type": "application/json",
@@ -183,8 +188,13 @@ Do NOT add descriptions or commentary—only the raw text content."""
             }
             
             print(f"🤖 Calling DeepSeek Vision API for bubble at {bubble_box}")
-            response = requests.post(url, headers=headers, json=payload, timeout=15)
-            response.raise_for_status()
+            response = requests.post(self.CHAT_URL, headers=headers, json=payload, timeout=15)
+            try:
+                response.raise_for_status()
+            except requests.HTTPError as exc:
+                body = response.text if response is not None else ""
+                print(f"❌ Vision HTTPError {response.status_code if response else '??'}: {body[:500]}")
+                raise exc
             result = response.json()
             
             if "choices" in result and len(result["choices"]) > 0:
@@ -516,7 +526,6 @@ Do NOT add descriptions or commentary—only the raw text content."""
             img_base64 = base64.b64encode(img_bytes).decode()
             
             # Call DeepSeek Vision API
-            url = "https://api.deepseek.com/chat/completions"
             headers = {
                 "Authorization": f"Bearer {settings.deepseek_api_key}",
                 "Content-Type": "application/json",
@@ -544,8 +553,13 @@ Do NOT add descriptions or commentary—only the raw text content."""
                 "temperature": 0.1,
             }
             
-            response = requests.post(url, headers=headers, json=payload, timeout=10)
-            response.raise_for_status()
+            response = requests.post(self.CHAT_URL, headers=headers, json=payload, timeout=10)
+            try:
+                response.raise_for_status()
+            except requests.HTTPError as exc:
+                body = response.text if response is not None else ""
+                print(f"❌ Vision HTTPError {response.status_code if response else '??'}: {body[:500]}")
+                raise exc
             result = response.json()
             
             if "choices" in result and len(result["choices"]) > 0:
