@@ -41,32 +41,25 @@ class VisionService:
         "system": "voice_system",
     }
 
-    def read_and_analyze_bubble(
-        self,
-        image_path: Path,
-        bubble_box: list[int],
-        page_height: int | float | None = None,
-    ) -> tuple[str, CharacterAnalysis]:
-        """Use AI vision to read text AND analyze character/emotion in one call."""
+    def detect_and_read_all_bubbles(self, image_path: Path) -> list[tuple[list[int], str, CharacterAnalysis]]:
+        """Use AI vision to find ALL text bubbles and read them in one go."""
         
         if not settings.deepseek_api_key:
-            print("⚠️ DeepSeek API key not set, using fallback")
-            return "", self._fallback_analysis()
+            print("⚠️ DeepSeek API key not set")
+            return []
         
         try:
-            # Crop the bubble region
+            # Load and encode the FULL image
             from PIL import Image
             image = Image.open(image_path)
-            crop = image.crop((bubble_box[0], bubble_box[1], bubble_box[2], bubble_box[3]))
             
-            # Convert to base64
             import io
             buffered = io.BytesIO()
-            crop.save(buffered, format="PNG")
+            image.save(buffered, format="PNG")
             img_bytes = buffered.getvalue()
             img_base64 = base64.b64encode(img_bytes).decode()
             
-            # Call DeepSeek Vision API with comprehensive prompt
+            # Call DeepSeek Vision API to find and read ALL text
             url = "https://api.deepseek.com/chat/completions"
             headers = {
                 "Authorization": f"Bearer {settings.deepseek_api_key}",
@@ -86,7 +79,101 @@ class VisionService:
                             },
                             {
                                 "type": "text",
-                                "text": "Read the text in this speech bubble or UI panel. Return ONLY the text content you see, exactly as written. Do not add any commentary or explanation."
+                                "text": """This is a manga/manhwa page. Find ALL text bubbles and UI panels.
+For each text element you find, return it in this exact format:
+TEXT: [the exact text you see]
+
+List them in reading order (top to bottom, left to right).
+Do not add any commentary, just the text."""
+                            }
+                        ]
+                    }
+                ],
+                "max_tokens": 500,
+                "temperature": 0,
+            }
+            
+            print(f"🤖 Calling DeepSeek Vision API to detect and read ALL bubbles")
+            response = requests.post(url, headers=headers, json=payload, timeout=30)
+            response.raise_for_status()
+            result = response.json()
+            
+            if "choices" not in result or len(result["choices"]) == 0:
+                print("⚠️ Vision API returned no results")
+                return []
+            
+            content = result["choices"][0]["message"]["content"].strip()
+            print(f"📝 Vision API response:\n{content}")
+            
+            # Parse the response to extract text entries
+            bubbles = []
+            lines = content.split("\n")
+            width, height = image.size
+            y_position = 200  # Start position
+            
+            for line in lines:
+                if line.startswith("TEXT:"):
+                    text = line[5:].strip()
+                    if text and len(text) > 2:
+                        # Create a bubble box (we don't have exact coordinates from vision API)
+                        bubble_box = [100, y_position, width - 100, y_position + 100]
+                        analysis = self._analyze_from_text(text, bubble_box, height)
+                        bubbles.append((bubble_box, text, analysis))
+                        y_position += 150  # Move down for next bubble
+                        print(f"✨ Found bubble: {text[:50]}")
+            
+            return bubbles
+            
+        except Exception as e:
+            print(f"❌ Vision API failed: {type(e).__name__}: {str(e)}")
+            return []
+    
+    def read_and_analyze_bubble(
+        self,
+        image_path: Path,
+        bubble_box: list[int],
+        page_height: int | float | None = None,
+    ) -> tuple[str, CharacterAnalysis]:
+        """Use AI vision to read text from a specific bubble region."""
+        
+        if not settings.deepseek_api_key:
+            print("⚠️ DeepSeek API key not set, using fallback")
+            return "", self._fallback_analysis()
+        
+        try:
+            # Crop the bubble region
+            from PIL import Image
+            image = Image.open(image_path)
+            crop = image.crop((bubble_box[0], bubble_box[1], bubble_box[2], bubble_box[3]))
+            
+            # Convert to base64
+            import io
+            buffered = io.BytesIO()
+            crop.save(buffered, format="PNG")
+            img_bytes = buffered.getvalue()
+            img_base64 = base64.b64encode(img_bytes).decode()
+            
+            # Call DeepSeek Vision API
+            url = "https://api.deepseek.com/chat/completions"
+            headers = {
+                "Authorization": f"Bearer {settings.deepseek_api_key}",
+                "Content-Type": "application/json",
+            }
+            payload = {
+                "model": "deepseek-chat",
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:image/png;base64,{img_base64}"
+                                }
+                            },
+                            {
+                                "type": "text",
+                                "text": "Read the text in this image. Return ONLY the text you see, exactly as written. Include punctuation like ? and ! Do not add commentary."
                             }
                         ]
                     }
@@ -115,6 +202,8 @@ class VisionService:
             
         except Exception as e:
             print(f"❌ Vision API failed: {type(e).__name__}: {str(e)}")
+            import traceback
+            print(traceback.format_exc())
             return "", self._fallback_analysis()
     
     def analyze_bubble(
