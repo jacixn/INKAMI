@@ -26,7 +26,12 @@ class OCRService:
     def extract(self, image_path: Path, box: Sequence[float]) -> str:
         image = Image.open(image_path).convert("RGB")
         crop = image.crop((box[0], box[1], box[2], box[3]))
-        return pytesseract.image_to_string(crop, config="--psm 6").strip()
+        # Try with different PSM modes for better detection
+        text = pytesseract.image_to_string(crop, config="--psm 6").strip()
+        if not text or len(text) < 5:
+            # Try with single text block mode for UI elements
+            text = pytesseract.image_to_string(crop, config="--psm 7").strip()
+        return text
 
     def detect_bubbles(self, image_path: Path, conf_threshold: int = 45) -> List[DetectedBubble]:
         image = Image.open(image_path).convert("RGB")
@@ -125,10 +130,26 @@ class OCRService:
         width, height = image.size
         ui_bubbles: List[DetectedBubble] = []
         
+        # Check middle region for UI panels (middle 40% of image)
+        middle_region = (int(width * 0.3), int(height * 0.3), int(width * 0.7), int(height * 0.7))
+        middle_text = self.extract(image_path, middle_region).strip()
+        if middle_text and len(middle_text) > 10:
+            # Check if this is likely UI text (contains system keywords)
+            ui_keywords = ["YOU ARE", "CHARACTER", "SYSTEM", "QUEST", "MISSION", "STATUS"]
+            if any(keyword in middle_text.upper() for keyword in ui_keywords):
+                ui_bubbles.append(
+                    DetectedBubble(
+                        bubble_id="ui_middle",
+                        box=list(middle_region),
+                        text=middle_text,
+                        kind="narration",
+                    )
+                )
+        
         # Check bottom region for UI text (bottom 20% of image)
         bottom_region = (0, int(height * 0.8), width, height)
         bottom_text = self.extract(image_path, bottom_region).strip()
-        if bottom_text and len(bottom_text) > 10:  # Increased minimum length
+        if bottom_text and len(bottom_text) > 10:
             ui_bubbles.append(
                 DetectedBubble(
                     bubble_id="ui_bottom",

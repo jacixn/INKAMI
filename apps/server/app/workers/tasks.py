@@ -144,17 +144,26 @@ def process_chapter(chapter_id: str, files: list[ChapterFile], job_id: str | Non
 
         # Refine each detected bubble text using a targeted OCR pass over its bounds.
         for bubble in detected:
-            refined = ocr_service.extract(image_path, bubble.box).strip()
+            # Expand the box slightly to capture edge text
+            expanded_box = [
+                max(0, bubble.box[0] - 10),
+                max(0, bubble.box[1] - 10),
+                min(page_width, bubble.box[2] + 10),
+                min(page_height, bubble.box[3] + 10)
+            ]
+            refined = ocr_service.extract(image_path, expanded_box).strip()
             if not refined:
                 continue
             current = bubble.text.strip()
-            if len(refined) > len(current) + 2 or ("?" in refined and "?" not in current):
+            # Always use refined if it contains more content or punctuation
+            if len(refined) > len(current) or ("?" in refined and "?" not in current) or ("..." in refined and "..." not in current):
                 bubble.text = refined
 
         print(f"🧠 OCR refined bubbles ({len(detected)}): {[bubble.text for bubble in detected]}")
 
         # Try to detect UI elements that might have been missed
         ui_elements = ocr_service.detect_ui_elements(image_path)
+        print(f"🖼️ UI detection found {len(ui_elements)} elements: {[elem.text for elem in ui_elements]}")
         if ui_elements:
             # Filter out UI elements that overlap with already detected bubbles
             for ui_elem in ui_elements:
