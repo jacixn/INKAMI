@@ -6,6 +6,9 @@ import { fetcher } from "@/lib/api";
 import type { BubbleItem, ChapterPayload, PlaybackController } from "@/lib/types";
 
 const NEXT_BUBBLE_DELAY_MS = 500;
+const basePath = (process.env.NEXT_PUBLIC_BASE_PATH ?? "").replace(/\/$/, "");
+const withBasePath = (assetPath: string) =>
+  `${basePath}${assetPath}` || assetPath;
 
 const demoChapter: ChapterPayload = {
   chapter_id: "demo",
@@ -16,7 +19,7 @@ const demoChapter: ChapterPayload = {
   pages: [
     {
       page_index: 0,
-      image_url: "/demo-page.webp",
+      image_url: withBasePath("/demo-page.webp"),
       items: [
         {
           bubble_id: "demo-bubble-1",
