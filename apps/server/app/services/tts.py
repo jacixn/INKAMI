@@ -31,7 +31,7 @@ class TTSService:
         "voice_adult_m": "TxGEqnHWrfWFTfGW9XjX",  # Josh - mature deep voice
         
         # Special voices
-        "voice_narrator": "EXAVITQu4vr4xnSDxMaL",  # Sarah - clear narrator (female)
+        "voice_narrator": "56bWURjYFHyYyVf490Dp",  # User-selected female narrator
         "voice_narrator_male": "ErXwobaYiN019PkySvjV",  # Antoni - friendly male narrator
         "voice_system": "CwhRBWXzGAHq8TQ4Fs17",  # Roger - calm, precise system tone
         "voice_sfx": "N2lVS1w4EtoT3dr4eOWO",  # Callum - punchy FX cues
