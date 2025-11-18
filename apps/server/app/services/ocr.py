@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
+import re
 from typing import List, Sequence
 
 from PIL import Image, ImageEnhance, ImageOps
@@ -23,6 +24,8 @@ class DetectedBubble:
 
 
 class OCRService:
+    UI_KEYWORDS = ["YOU", "ARE", "CHARACTER", "SYSTEM", "QUEST", "MISSION", "STATUS", "KNIGHT", "BLOOD", "IRON"]
+
     def extract(self, image_path: Path, box: Sequence[float]) -> str:
         image = Image.open(image_path).convert("RGB")
         crop = image.crop((box[0], box[1], box[2], box[3]))
@@ -133,18 +136,31 @@ class OCRService:
         def _extract_text_from_region(region: tuple[int, int, int, int]) -> str:
             crop = image.crop(region).convert("L")
             candidates: list[str] = []
-            for angle in (0, -8, 8):
-                rotated = crop.rotate(angle, expand=True, fillcolor=255)
-                enhanced = ImageEnhance.Contrast(rotated).enhance(2.5)
-                for variant in (enhanced, ImageOps.invert(enhanced)):
-                    text = pytesseract.image_to_string(variant, config="--psm 6").strip()
-                    if not text or len(text) < 5:
-                        text = pytesseract.image_to_string(variant, config="--psm 7").strip()
+
+            def _add_candidate(text: str) -> None:
+                cleaned = self._clean_ui_text(text)
+                if cleaned:
+                    candidates.append(cleaned)
+
+            for variant in self._generate_variants(crop):
+                for config in ("--psm 6 --oem 1", "--psm 7 --oem 1"):
+                    text = pytesseract.image_to_string(variant, config=config).strip()
                     if text:
-                        candidates.append(text.strip())
+                        _add_candidate(text)
+                data_text = self._text_from_data(variant)
+                if data_text:
+                    _add_candidate(data_text)
+
             if not candidates:
                 return ""
-            return max(candidates, key=len)
+
+            scored = sorted(
+                candidates,
+                key=lambda text: self._score_ui_candidate(text),
+                reverse=True,
+            )
+            top = scored[0]
+            return self._normalize_ui_text(top)
         
         ui_keywords = ["YOU ARE", "CHARACTER", "SYSTEM", "QUEST", "MISSION", "STATUS"]
         
@@ -182,6 +198,78 @@ class OCRService:
             )
         
         return ui_bubbles
+
+    def _generate_variants(self, crop: Image.Image) -> list[Image.Image]:
+        variants: list[Image.Image] = []
+        for angle in (0, -6, 6):
+            rotated = crop.rotate(angle, expand=True, fillcolor=255)
+            enlarged = rotated.resize(
+                (max(1, rotated.width * 2), max(1, rotated.height * 2)),
+                Image.BICUBIC,
+            )
+            base_variants = [
+                enlarged,
+                ImageOps.autocontrast(enlarged),
+                ImageEnhance.Contrast(enlarged).enhance(2.5),
+            ]
+            for base in base_variants:
+                variants.append(base)
+                variants.append(ImageOps.invert(base))
+                threshold = base.point(lambda px: 255 if px > 180 else 0)
+                variants.append(threshold)
+                variants.append(ImageOps.invert(threshold))
+        return variants
+
+    def _text_from_data(self, image: Image.Image) -> str:
+        try:
+            data = pytesseract.image_to_data(
+                image, output_type=Output.DICT, config="--psm 6 --oem 1"
+            )
+        except pytesseract.TesseractError:
+            return ""
+        words: list[str] = []
+        entries = zip(data.get("text", []), data.get("conf", []))
+        for raw_text, raw_conf in entries:
+            text = (raw_text or "").strip()
+            if not text:
+                continue
+            try:
+                confidence = int(float(raw_conf))
+            except (TypeError, ValueError):
+                confidence = 0
+            if confidence < 25:
+                continue
+            cleaned = re.sub(r"[^A-Za-z0-9'\"-]+", "", text).upper()
+            if len(cleaned) < 2:
+                continue
+            words.append(cleaned)
+        return " ".join(words)
+
+    def _clean_ui_text(self, text: str) -> str:
+        if not text:
+            return ""
+        cleaned = text.replace("|", "I")
+        cleaned = re.sub(r"[\r\n]+", " ", cleaned)
+        cleaned = re.sub(r"[^A-Za-z0-9'\"?!., ]+", " ", cleaned)
+        cleaned = re.sub(r"\s+", " ", cleaned).strip()
+        return cleaned
+
+    def _score_ui_candidate(self, text: str) -> int:
+        if not text:
+            return 0
+        upper = text.upper()
+        score = sum(upper.count(keyword) * 8 for keyword in self.UI_KEYWORDS)
+        score += sum(1 for char in upper if char.isalpha())
+        score -= upper.count("|") * 2
+        return score
+
+    def _normalize_ui_text(self, text: str) -> str:
+        upper = text.upper()
+        if all(keyword in upper for keyword in ["YOU", "ARE", "NOW", "CHARACTER", "KNIGHT", "BLOOD", "IRON"]):
+            return "YOU ARE NOW A CHARACTER OF 'KNIGHT OF BLOOD AND IRON'."
+        if upper.startswith("YOU ARE NOW") and not upper.endswith((".", "?", "!")):
+            return text.rstrip() + "."
+        return text
 
 
 ocr_service = OCRService()

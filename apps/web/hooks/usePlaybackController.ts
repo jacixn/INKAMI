@@ -5,6 +5,8 @@ import useSWR from "swr";
 import { fetcher } from "@/lib/api";
 import type { BubbleItem, ChapterPayload, PlaybackController } from "@/lib/types";
 
+const NEXT_BUBBLE_DELAY_MS = 500;
+
 const demoChapter: ChapterPayload = {
   chapter_id: "demo",
   title: "Demo Chapter",
@@ -213,13 +215,25 @@ export function usePlaybackController(chapterId: string): ControllerState {
         typeof window !== "undefined" &&
         "speechSynthesis" in window;
 
+      const scheduleNext = () => {
+        const gap = Math.max(
+          250,
+          Math.round(NEXT_BUBBLE_DELAY_MS / Math.max(speed, 0.5))
+        );
+        if (typeof window === "undefined") {
+          nextBubbleRef.current();
+          return;
+        }
+        window.setTimeout(() => nextBubbleRef.current(), gap);
+      };
+
       if (shouldUseSpeech) {
         const utterance = new SpeechSynthesisUtterance(target.bubble.text);
         utterance.rate = speed;
         utterance.onend = () => {
           speechRef.current = null;
           setIsPlaying(false);
-          nextBubbleRef.current();
+          scheduleNext();
         };
         utterance.onerror = (event) => {
           speechRef.current = null;
@@ -239,7 +253,7 @@ export function usePlaybackController(chapterId: string): ControllerState {
       audio.playbackRate = speed;
       audio.onended = () => {
         setIsPlaying(false);
-        nextBubbleRef.current();
+        scheduleNext();
       };
       audio.onerror = () => {
         setErrors((prev) => [...prev, `Audio failed for ${bubbleId}`]);
