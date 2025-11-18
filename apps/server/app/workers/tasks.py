@@ -55,49 +55,6 @@ def _normalize_text(text: str) -> str:
     return cleaned.strip()
 
 
-def _bubble_to_item(
-    chapter_id: str,
-    page_index: int,
-    bubble_index: int,
-    page_width: int,
-    page_height: int,
-    bubble: DetectedBubble,
-    image_path: Path,
-) -> BubbleItem:
-    speaker_id = f"{chapter_id[:6]}_speaker_{page_index}_{bubble_index}"
-    
-    # Use AI vision to analyze the bubble and determine voice/emotion
-    analysis = vision_service.analyze_bubble(
-        image_path=image_path,
-        text=bubble.text,
-        bubble_box=list(bubble.box),
-        page_height=page_height,
-    )
-    assigned_voice = analysis.voice_suggestion
-    normalized_text = _normalize_text(bubble.text)
-    
-    # Generate TTS with emotion parameters from AI analysis
-    tts_result = tts_service.synthesize(
-        normalized_text,
-        assigned_voice,
-        stability=analysis.stability,
-        similarity_boost=analysis.similarity_boost,
-    )
-    
-    return BubbleItem(
-        bubble_id=f"bubble_{page_index}_{bubble_index}",
-        panel_box=[0, 0, page_width, page_height],
-        bubble_box=list(bubble.box),
-        type=bubble.kind,
-        speaker_id=speaker_id,
-        speaker_name=bubble.speaker_name,
-        voice_id=assigned_voice,
-        text=normalized_text,
-        audio_url=tts_result.audio_url,
-        word_times=[WordTime(**word.model_dump()) for word in tts_result.word_times],
-    )
-
-
 def _fallback_bubble(page_width: int, page_height: int) -> DetectedBubble:
     text = "We couldn't transcribe this bubble yet, but playback is ready."
     return DetectedBubble(
@@ -192,15 +149,56 @@ def process_chapter(chapter_id: str, files: list[ChapterFile], job_id: str | Non
 
         items: list[BubbleItem] = []
         for bubble_idx, bubble in enumerate(detected):
-            items.append(
-                _bubble_to_item(
-                    chapter_id=chapter_id,
-                    page_index=index,
-                    bubble_index=bubble_idx,
-                    page_width=page_width,
-                    page_height=page_height,
-                    bubble=bubble,
+            # Use Vision API to read the text instead of relying on OCR
+            vision_text, analysis = vision_service.read_and_analyze_bubble(
+                image_path=image_path,
+                bubble_box=list(bubble.box),
+                page_height=page_height,
+            )
+            
+            # If vision API got text, use it; otherwise fall back to OCR text
+            if vision_text and len(vision_text) > 3:
+                final_text = vision_text
+                assigned_voice = analysis.voice_suggestion
+                stability = analysis.stability
+                similarity_boost = analysis.similarity_boost
+                print(f"✅ Using Vision API text: {final_text[:50]}")
+            else:
+                # Fallback to OCR-based analysis
+                print(f"⚠️ Vision API failed, using OCR text: {bubble.text[:50]}")
+                analysis = vision_service.analyze_bubble(
                     image_path=image_path,
+                    text=bubble.text,
+                    bubble_box=list(bubble.box),
+                    page_height=page_height,
+                )
+                final_text = bubble.text
+                assigned_voice = analysis.voice_suggestion
+                stability = analysis.stability
+                similarity_boost = analysis.similarity_boost
+            
+            normalized_text = _normalize_text(final_text)
+            
+            # Generate TTS with emotion parameters
+            tts_result = tts_service.synthesize(
+                normalized_text,
+                assigned_voice,
+                stability=stability,
+                similarity_boost=similarity_boost,
+            )
+            
+            items.append(
+                BubbleItem(
+                    bubble_id=f"bubble_{index}_{bubble_idx}",
+                    panel_box=[0, 0, page_width, page_height],
+                    bubble_box=list(bubble.box),
+                    type=bubble.kind,
+                    speaker_id=f"{chapter_id[:6]}_speaker_{index}_{bubble_idx}",
+                    speaker_name=bubble.speaker_name,
+                    voice_id=assigned_voice,
+                    text=normalized_text,
+                    audio_url=tts_result.audio_url,
+                    word_times=[WordTime(**word.model_dump()) for word in tts_result.word_times],
                 )
             )
 

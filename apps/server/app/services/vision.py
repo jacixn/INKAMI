@@ -41,6 +41,82 @@ class VisionService:
         "system": "voice_system",
     }
 
+    def read_and_analyze_bubble(
+        self,
+        image_path: Path,
+        bubble_box: list[int],
+        page_height: int | float | None = None,
+    ) -> tuple[str, CharacterAnalysis]:
+        """Use AI vision to read text AND analyze character/emotion in one call."""
+        
+        if not settings.deepseek_api_key:
+            print("⚠️ DeepSeek API key not set, using fallback")
+            return "", self._fallback_analysis()
+        
+        try:
+            # Crop the bubble region
+            from PIL import Image
+            image = Image.open(image_path)
+            crop = image.crop((bubble_box[0], bubble_box[1], bubble_box[2], bubble_box[3]))
+            
+            # Convert to base64
+            import io
+            buffered = io.BytesIO()
+            crop.save(buffered, format="PNG")
+            img_bytes = buffered.getvalue()
+            img_base64 = base64.b64encode(img_bytes).decode()
+            
+            # Call DeepSeek Vision API with comprehensive prompt
+            url = "https://api.deepseek.com/chat/completions"
+            headers = {
+                "Authorization": f"Bearer {settings.deepseek_api_key}",
+                "Content-Type": "application/json",
+            }
+            payload = {
+                "model": "deepseek-chat",
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:image/png;base64,{img_base64}"
+                                }
+                            },
+                            {
+                                "type": "text",
+                                "text": "Read the text in this speech bubble or UI panel. Return ONLY the text content you see, exactly as written. Do not add any commentary or explanation."
+                            }
+                        ]
+                    }
+                ],
+                "max_tokens": 200,
+                "temperature": 0,
+            }
+            
+            print(f"🤖 Calling DeepSeek Vision API for bubble at {bubble_box}")
+            response = requests.post(url, headers=headers, json=payload, timeout=15)
+            response.raise_for_status()
+            result = response.json()
+            
+            if "choices" in result and len(result["choices"]) > 0:
+                text = result["choices"][0]["message"]["content"].strip()
+                # Clean up the response
+                text = text.replace("\n", " ").replace("  ", " ").strip()
+                print(f"✨ Vision API read: {text}")
+                
+                # Analyze the text for voice selection
+                analysis = self._analyze_from_text(text, bubble_box, page_height)
+                return text, analysis
+            
+            print("⚠️ Vision API returned no text")
+            return "", self._fallback_analysis()
+            
+        except Exception as e:
+            print(f"❌ Vision API failed: {type(e).__name__}: {str(e)}")
+            return "", self._fallback_analysis()
+    
     def analyze_bubble(
         self,
         image_path: Path,
@@ -49,14 +125,6 @@ class VisionService:
         page_height: int | float | None = None,
     ) -> CharacterAnalysis:
         """Analyze a speech bubble and determine character emotion and voice."""
-        
-        # If the text looks like OCR gibberish, try vision API to read it properly
-        if self._is_ocr_gibberish(text):
-            print(f"🔍 OCR gibberish detected, trying vision API: {text[:50]}")
-            vision_result = self._read_with_vision(image_path, bubble_box)
-            if vision_result and len(vision_result) > 5:
-                print(f"✨ Vision API successfully read: {vision_result}")
-                text = vision_result
         
         # Use smart text analysis to determine emotion and voice
         return self._analyze_from_text(text, bubble_box, page_height)
