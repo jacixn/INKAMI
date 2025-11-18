@@ -39,6 +39,19 @@ def _normalize_text(text: str) -> str:
     return cleaned.strip()
 
 
+def _bubble_kind_from_analysis(analysis: CharacterAnalysis) -> str:
+    descriptor = (analysis.character_type or "").lower()
+    if any(keyword in descriptor for keyword in ("system", "ui", "computer", "panel")):
+        return "narration"
+    if any(keyword in descriptor for keyword in ("narration", "narrator")):
+        return "narration"
+    if "thought" in descriptor:
+        return "thought"
+    if "sfx" in descriptor or "sound" in descriptor:
+        return "sfx"
+    return "dialogue"
+
+
 def process_chapter(chapter_id: str, files: list[ChapterFile], job_id: str | None = None) -> None:
     if not files:
         return
@@ -75,6 +88,12 @@ def process_chapter(chapter_id: str, files: list[ChapterFile], job_id: str | Non
         items: list[BubbleItem] = []
         for bubble_idx, (bubble_box, text, analysis) in enumerate(vision_bubbles):
             normalized_text = _normalize_text(text)
+            bubble_type = _bubble_kind_from_analysis(analysis)
+            speaker_label = (
+                analysis.character_type.replace("_", " ").title()
+                if analysis.character_type
+                else None
+            )
             
             # Generate TTS with emotion parameters
             tts_result = tts_service.synthesize(
@@ -89,9 +108,9 @@ def process_chapter(chapter_id: str, files: list[ChapterFile], job_id: str | Non
                     bubble_id=f"bubble_{index}_{bubble_idx}",
                     panel_box=[0, 0, page_width, page_height],
                     bubble_box=bubble_box,
-                    type="dialogue",
+                    type=bubble_type,
                     speaker_id=f"{chapter_id[:6]}_speaker_{index}_{bubble_idx}",
-                    speaker_name=None,
+                    speaker_name=speaker_label,
                     voice_id=analysis.voice_suggestion,
                     text=normalized_text,
                     audio_url=tts_result.audio_url,

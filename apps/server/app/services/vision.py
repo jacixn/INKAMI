@@ -22,6 +22,29 @@ class CharacterAnalysis:
     similarity_boost: float  # 0.0-1.0, higher = more similar to original voice
 
 
+@dataclass
+class VisionTextEntry:
+    text: str
+    speaker_gender: str | None = None
+    speaker_age: str | None = None
+    emotion: str | None = None
+    tone: str | None = None
+    bubble_type: str | None = None
+
+    @property
+    def has_metadata(self) -> bool:
+        return any(
+            value
+            for value in (
+                self.speaker_gender,
+                self.speaker_age,
+                self.emotion,
+                self.tone,
+                self.bubble_type,
+            )
+        )
+
+
 class VisionService:
     """Service for analyzing manga/manhwa images with AI vision."""
 
@@ -63,12 +86,16 @@ class VisionService:
             img_base64 = base64.b64encode(img_bytes).decode()
             
             prompt = (
-                "Extract EVERY readable text from this entire manga page. "
-                "Include speech bubbles, narration boxes, UI panels, glowing screens, "
-                "sound effects, and any stylized text. Return the text in reading order "
-                "(top-to-bottom, left-to-right). Use either JSON "
-                '([{\"text\":\"...\"}, ...]) or bullet lines starting with TEXT:. '
-                "Do not add commentary."
+                "You are an expert manga letterer and voice director. "
+                "Look at the ENTIRE page and extract EVERY readable text element: speech bubbles, narration boxes, "
+                "system/U.I. panels, glowing screens, and sound effects. "
+                "Return results in reading order (top-to-bottom, left-to-right) as STRICT JSON (no narration outside JSON). "
+                "Each entry must be an object with: "
+                '{"text":"..." , "speaker_gender":"male|female|unknown", '
+                '"speaker_age":"child|teen|young adult|adult", '
+                '"emotion":"happy|sad|angry|scared|serious|neutral", '
+                '"tone":"playful|serious|questioning|dramatic|neutral", '
+                '"bubble_type":"dialogue|thought|narration|system|sfx" }.'
             )
             
             print("🤖 Calling GPT-4o-mini to detect and read ALL bubbles")
@@ -78,18 +105,19 @@ class VisionService:
                 return []
             print(f"📝 Vision API response:\n{content}")
             
-            texts = self._parse_detected_texts(content)
-            if not texts:
+            entries = self._parse_detected_entries(content)
+            if not entries:
                 print("⚠️ Could not parse any text entries from vision response")
                 return []
             
             width, height = image.size
-            boxes = self._approximate_bubble_boxes(len(texts), width, height)
+            boxes = self._approximate_bubble_boxes(len(entries), width, height)
             
             bubbles: list[tuple[list[int], str, CharacterAnalysis]] = []
-            for idx, text in enumerate(texts):
+            for idx, entry in enumerate(entries):
+                text = entry.text
                 bubble_box = boxes[idx] if idx < len(boxes) else [80, 80, width - 80, height - 80]
-                analysis = self._analyze_from_text(text, bubble_box, height)
+                analysis = self._analysis_from_entry(entry, text, bubble_box, height)
                 bubbles.append((bubble_box, text, analysis))
                 print(f"✨ Vision detected text #{idx + 1}: {text[:60]}")
             
@@ -158,8 +186,91 @@ class VisionService:
         # Use smart text analysis to determine emotion and voice
         return self._analyze_from_text(text, bubble_box, page_height)
 
-    def _parse_detected_texts(self, content: str) -> list[str]:
-        """Parse multi-bubble output from the vision API into clean text strings."""
+    def _analysis_from_entry(
+        self,
+        entry: VisionTextEntry,
+        fallback_text: str,
+        bubble_box: list[int],
+        page_height: int | float | None,
+    ) -> CharacterAnalysis:
+        if entry.has_metadata:
+            metadata_analysis = self._analysis_from_metadata(entry)
+            if metadata_analysis:
+                return metadata_analysis
+        return self._analyze_from_text(fallback_text, bubble_box, page_height)
+
+    def _analysis_from_metadata(self, entry: VisionTextEntry) -> CharacterAnalysis | None:
+        gender = (entry.speaker_gender or "unknown").lower()
+        age = (entry.speaker_age or "").lower()
+        bubble_type = (entry.bubble_type or "").lower()
+        emotion = (entry.emotion or "neutral").lower()
+        tone = (entry.tone or "normal").lower()
+
+        voice_key = self._map_voice_key(gender, age, bubble_type)
+        voice_id = self.VOICE_MAPPING.get(voice_key, self.VOICE_MAPPING["narrator"])
+        stability, similarity = self._emotion_to_settings(emotion)
+
+        character_label = bubble_type or f"{gender}_{age or 'unknown'}"
+        print(
+            f"🎭 Vision metadata: type={character_label} gender={gender} age={age} "
+            f"emotion={emotion} → {voice_id} (stability={stability})"
+        )
+
+        return CharacterAnalysis(
+            character_type=character_label,
+            emotion=emotion,
+            tone=tone,
+            voice_suggestion=voice_id,
+            stability=stability,
+            similarity_boost=similarity,
+        )
+
+    def _map_voice_key(self, gender: str, age: str, bubble_type: str) -> str:
+        if bubble_type in {"system", "ui", "computer", "hud"}:
+            return "system"
+        if bubble_type in {"narration", "narrator"}:
+            return "narrator"
+
+        if gender == "male":
+            if any(keyword in age for keyword in ("child", "kid", "boy")):
+                return "child_male"
+            if any(keyword in age for keyword in ("teen", "young", "youth")):
+                return "young_male"
+            return "adult_male"
+
+        if gender == "female":
+            if any(keyword in age for keyword in ("child", "kid", "girl")):
+                return "child_female"
+            if any(keyword in age for keyword in ("teen", "young", "youth")):
+                return "young_female"
+            return "adult_female"
+
+        # Unknown gender: infer from bubble type or default to young female
+        if bubble_type in {"thought"}:
+            return "young_female"
+        if bubble_type in {"sfx"}:
+            return "narrator"
+        return "young_female"
+
+    def _emotion_to_settings(self, emotion: str) -> tuple[float, float]:
+        emotion = emotion.lower()
+        stability = 0.5
+        similarity = 0.75
+
+        if emotion in {"angry", "furious", "excited", "ecstatic"}:
+            stability = 0.25
+            similarity = 0.7
+        elif emotion in {"happy", "playful", "amused"}:
+            stability = 0.35
+        elif emotion in {"sad", "melancholy", "serious", "calm"}:
+            stability = 0.65
+            similarity = 0.8
+        elif emotion in {"scared", "nervous", "anxious"}:
+            stability = 0.4
+
+        return stability, similarity
+
+    def _parse_detected_entries(self, content: str) -> list[VisionTextEntry]:
         if not content:
             return []
         
@@ -167,15 +278,76 @@ class VisionService:
         if not content:
             return []
         
-        # Try JSON decoding first (if the model followed instructions)
         try:
             parsed = json.loads(content)
-            json_texts = self._extract_texts_from_structure(parsed)
-            if json_texts:
-                return json_texts
+            entries = self._extract_entries_from_structure(parsed)
+            if entries:
+                return entries
         except json.JSONDecodeError:
             pass
         
+        fallback_texts = self._split_plain_text(content)
+        return [VisionTextEntry(text=text) for text in fallback_texts]
+    
+    def _extract_entries_from_structure(self, data) -> list[VisionTextEntry]:
+        if isinstance(data, list):
+            entries: list[VisionTextEntry] = []
+            for item in data:
+                entries.extend(self._extract_entries_from_structure(item))
+            return entries
+        
+        if isinstance(data, dict):
+            entry = self._entry_from_dict(data)
+            if entry:
+                return [entry]
+            entries: list[VisionTextEntry] = []
+            for value in data.values():
+                entries.extend(self._extract_entries_from_structure(value))
+            return entries
+        
+        if isinstance(data, str):
+            text = data.strip()
+            if text:
+                return [VisionTextEntry(text=text)]
+        return []
+    
+    def _entry_from_dict(self, data: dict) -> VisionTextEntry | None:
+        text_value = data.get("text") or data.get("content")
+        if isinstance(text_value, (str, int, float)):
+            text = str(text_value).strip()
+            if not text:
+                return None
+            return VisionTextEntry(
+                text=text,
+                speaker_gender=self._clean_meta_value(
+                    data.get("speaker_gender")
+                    or data.get("gender")
+                    or data.get("voice_gender")
+                ),
+                speaker_age=self._clean_meta_value(
+                    data.get("speaker_age") or data.get("age")
+                ),
+                emotion=self._clean_meta_value(data.get("emotion")),
+                tone=self._clean_meta_value(data.get("tone")),
+                bubble_type=self._clean_meta_value(
+                    data.get("bubble_type")
+                    or data.get("type")
+                    or data.get("speaker_type")
+                ),
+            )
+        return None
+    
+    def _clean_meta_value(self, value) -> str | None:
+        if value is None:
+            return None
+        if isinstance(value, (int, float)):
+            return str(value).strip()
+        if isinstance(value, str):
+            cleaned = value.strip()
+            return cleaned if cleaned else None
+        return None
+    
+    def _split_plain_text(self, content: str) -> list[str]:
         lines = content.replace("\r", "\n").split("\n")
         cleaned_lines: list[str] = []
         for raw_line in lines:
@@ -214,28 +386,6 @@ class VisionService:
         if not bubbles and content:
             bubbles = [content.strip()]
         return [text for text in bubbles if len(text) > 1]
-
-    def _extract_texts_from_structure(self, data) -> list[str]:
-        """Recursively extract text fields from a JSON-like structure."""
-        texts: list[str] = []
-        if isinstance(data, str):
-            cleaned = data.strip()
-            if cleaned:
-                texts.append(cleaned)
-        elif isinstance(data, dict):
-            if "text" in data:
-                value = data["text"]
-                if isinstance(value, (str, int, float)):
-                    cleaned = str(value).strip()
-                    if cleaned:
-                        texts.append(cleaned)
-            # Support keys like "bubbles" or "items"
-            for value in data.values():
-                texts.extend(self._extract_texts_from_structure(value))
-        elif isinstance(data, list):
-            for item in data:
-                texts.extend(self._extract_texts_from_structure(item))
-        return texts
 
     def _approximate_bubble_boxes(
         self, count: int, width: int, height: int
@@ -382,7 +532,7 @@ class VisionService:
         print(f"🎭 Text Analysis: {emotion} ({tone}) → {voice_id} [stability: {stability}]")
         
         return CharacterAnalysis(
-            character_type="analyzed_from_text",
+            character_type=voice_archetype,
             emotion=emotion,
             tone=tone,
             voice_suggestion=voice_id,

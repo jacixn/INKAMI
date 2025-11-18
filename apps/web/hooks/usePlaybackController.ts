@@ -308,17 +308,29 @@ export function usePlaybackController(chapterId: string): ControllerState {
     setIsPlaying(false);
   }, []);
 
-  const nextBubble = useCallback(() => {
-    if (!readingOrder.length) return;
-    const index = readingOrder.findIndex((id) => id === currentBubbleId);
-    const nextId = index >= 0 ? readingOrder[index + 1] : readingOrder[0];
-    if (nextId) {
-      setCurrentBubbleId(nextId);
-      if (isPlaying) {
-        void loadAudio(nextId);
+  const advanceBubble = useCallback(
+    (autoPlay: boolean) => {
+      if (!readingOrder.length) return;
+      const index = readingOrder.findIndex((id) => id === currentBubbleId);
+      const nextId =
+        index >= 0 && index + 1 < readingOrder.length
+          ? readingOrder[index + 1]
+          : index < 0
+            ? readingOrder[0]
+            : undefined;
+      if (nextId) {
+        setCurrentBubbleId(nextId);
+        if (autoPlay || isPlaying) {
+          void loadAudio(nextId);
+        }
+      } else if (autoPlay) {
+        setIsPlaying(false);
       }
-    }
-  }, [currentBubbleId, isPlaying, loadAudio, readingOrder]);
+    },
+    [currentBubbleId, isPlaying, loadAudio, readingOrder]
+  );
+
+  const nextBubble = useCallback(() => advanceBubble(false), [advanceBubble]);
 
   const prevBubble = useCallback(() => {
     if (!readingOrder.length) return;
@@ -340,8 +352,8 @@ export function usePlaybackController(chapterId: string): ControllerState {
   }, [speed]);
 
   useEffect(() => {
-    nextBubbleRef.current = () => nextBubble();
-  }, [nextBubble]);
+    nextBubbleRef.current = () => advanceBubble(true);
+  }, [advanceBubble]);
 
   useEffect(() => {
     return () => {
