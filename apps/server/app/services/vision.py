@@ -65,7 +65,7 @@ class VisionService:
         "adult_male": "voice_adult_m",
         
         # Special
-        "narrator": "voice_narrator",
+        "narrator": "voice_narrator_f",
         "system": "voice_system",
     }
 
@@ -771,7 +771,7 @@ class VisionService:
         else:
             stability = min(stability, base_stability)
 
-        voice_id = self.VOICE_MAPPING.get(voice_archetype, "voice_narrator")
+        voice_id = self.VOICE_MAPPING.get(voice_archetype, "voice_narrator_f")
         
         print(
             f"🎭 Text Analysis: {emotion} ({tone}) → {voice_id} "
@@ -903,7 +903,7 @@ class VisionService:
             character_type="unknown",
             emotion="neutral",
             tone="normal",
-            voice_suggestion="voice_narrator",
+            voice_suggestion="voice_narrator_f",
             stability=0.5,
             similarity_boost=0.75,
             style=0.2,

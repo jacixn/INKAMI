@@ -30,9 +30,12 @@ class TTSService:
         "voice_young_m": "yoZ06aMxZJJ28mfd3POQ",  # Adam - realistic heroic lead
         "voice_adult_m": "TxGEqnHWrfWFTfGW9XjX",  # Josh - mature deep voice
         
-        # Special voices
-        "voice_narrator": "EXAVITQu4vr4xnSDxMaL",  # Sarah - natural clear narrator
-        "voice_narrator_male": "pNInz6obpgDQGcFmaJgB",  # Josh B - warm, grounded narrator
+        # Narrators
+        "voice_narrator_f": "EXAVITQu4vr4xnSDxMaL",  # Sarah - cinematic female narrator
+        "voice_narrator_m": "VR6AewLTigWG4xSOukaG",  # Tom - rich male narrator
+
+        # Backwards compatibility alias (legacy narrator id)
+        "voice_narrator": "EXAVITQu4vr4xnSDxMaL",
         "voice_system": "CwhRBWXzGAHq8TQ4Fs17",  # Roger - calm, precise system tone
         "voice_sfx": "N2lVS1w4EtoT3dr4eOWO",  # Callum - punchy FX cues
     }
@@ -44,8 +47,9 @@ class TTSService:
         "voice_child_m": "Young Boy",
         "voice_young_m": "Young Man",
         "voice_adult_m": "Mature Man",
-        "voice_narrator": "Narrator (Female)",
-        "voice_narrator_male": "Narrator (Male)",
+        "voice_narrator_f": "Narrator • Female",
+        "voice_narrator_m": "Narrator • Male",
+        "voice_narrator": "Narrator • Legacy",
         "voice_system": "System Voice",
         "voice_sfx": "FX Voice",
     }
@@ -53,6 +57,18 @@ class TTSService:
     ELEVEN_MODEL = "eleven_multilingual_v2"
 
     VOICE_SETTINGS_OVERRIDES = {
+        "voice_narrator_f": {
+            "stability": 0.72,
+            "similarity_boost": 0.8,
+            "style": 0.35,
+            "use_speaker_boost": True,
+        },
+        "voice_narrator_m": {
+            "stability": 0.75,
+            "similarity_boost": 0.82,
+            "style": 0.3,
+            "use_speaker_boost": True,
+        },
         "voice_system": {
             "stability": 0.92,
             "similarity_boost": 0.25,
@@ -119,10 +135,7 @@ class TTSService:
         similarity_boost: float = 0.75,
         style: float | None = None,
     ) -> TTSResult:
-        resolved_voice = self.ELEVEN_VOICE_MAP.get(voice_id, self.ELEVEN_VOICE_MAP["voice_narrator"])
-        print(f"🎯 Voice mapping: {voice_id} → ElevenLabs ID: {resolved_voice}")
-        if voice_id in {"voice_narrator", "voice_narrator_male"}:
-            print(f"📢 NARRATOR VOICE: {voice_id} = {resolved_voice}")
+        resolved_voice = self.ELEVEN_VOICE_MAP.get(voice_id, self.ELEVEN_VOICE_MAP["voice_narrator_f"])
         url = f"https://api.elevenlabs.io/v1/text-to-speech/{resolved_voice}"
         headers = {
             "xi-api-key": settings.elevenlabs_api_key or "",
@@ -147,13 +160,7 @@ class TTSService:
             "voice_settings": voice_settings,
         }
         response = requests.post(url, headers=headers, json=payload, timeout=60)
-        if response.status_code >= 400:
-            snippet = response.text[:500] if response.text else "No response body"
-            print(
-                f"🚨 ElevenLabs error for voice {voice_id} ({resolved_voice}): "
-                f"status={response.status_code} body={snippet}"
-            )
-            response.raise_for_status()
+        response.raise_for_status()
         audio_bytes = response.content
         key = f"tts/{voice_id}/{uuid4().hex}.mp3"
         audio_url = storage_client.put_bytes(key, audio_bytes, "audio/mpeg")

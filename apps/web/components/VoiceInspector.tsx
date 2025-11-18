@@ -16,7 +16,9 @@ const voiceOptions = [
   { id: "voice_child_m", label: "Young Boy • Child" },
   { id: "voice_young_m", label: "Young Man • Hero" },
   { id: "voice_adult_m", label: "Mature Man • Warrior" },
-  { id: "voice_narrator", label: "Narrator • Story" },
+  { id: "voice_narrator_f", label: "Narrator • Female Story" },
+  { id: "voice_narrator_m", label: "Narrator • Male Story" },
+  { id: "voice_narrator", label: "Narrator • Legacy" },
   { id: "voice_system", label: "System Voice • UI" },
   { id: "voice_sfx", label: "FX Voice • Effects" }
 ];
@@ -105,7 +107,7 @@ export default function VoiceInspector({ controller }: Props) {
               <span
                 className={cn(
                   "rounded-full px-3 py-1 text-xs",
-                  entry.voice_id === "voice_narrator"
+                  entry.voice_id.startsWith("voice_narrator")
                     ? "bg-blue-500/20 text-blue-100"
                     : "bg-purple-500/20 text-purple-100"
                 )}

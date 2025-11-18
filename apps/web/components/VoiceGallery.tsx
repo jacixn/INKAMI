@@ -36,10 +36,16 @@ const voices = [
     traits: "Deep, stoic, authoritative"
   },
   {
-    id: "voice_narrator",
-    name: "Narrator",
+    id: "voice_narrator_f",
+    name: "Narrator (Female)",
     tone: "Story voice",
-    traits: "Clear, neutral, professional"
+    traits: "Warm, cinematic, articulate"
+  },
+  {
+    id: "voice_narrator_m",
+    name: "Narrator (Male)",
+    tone: "Story voice",
+    traits: "Resonant, grounded, steady"
   },
   {
     id: "voice_system",
