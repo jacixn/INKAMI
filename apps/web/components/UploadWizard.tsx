@@ -128,7 +128,7 @@ export default function UploadWizard() {
           type="file"
           accept=".zip,.pdf,image/*"
           multiple
-          hidden
+          className="sr-only absolute h-0 w-0 opacity-0"
           onChange={(event) => handleFiles(event.target.files)}
         />
       </motion.div>
