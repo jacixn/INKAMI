@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import base64
+import html
 import random
 from dataclasses import dataclass
 from typing import List
@@ -227,33 +227,27 @@ class TTSService:
         if not api_key:
             raise RuntimeError("OpenAI API key missing")
         voice = self.OPENAI_VOICE_MAP.get(voice_id, "alloy")
-        url = "https://api.openai.com/v1/responses"
+        url = "https://api.openai.com/v1/audio/speech"
         headers = {
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
         }
-        system_instruction = (
-            "You are a professional voice actor. Read exactly the user script "
-            "and respect punctuation—questions should rise, commas create pauses, "
-            "ellipses trail off naturally."
-        )
-        if tone_hint:
-            system_instruction += f" For this specific line: {tone_hint.strip()}"
-        payload = {
-            "model": self.OPENAI_TTS_MODEL,
-            "modalities": ["text", "audio"],
-            "input": [
-                {
-                    "role": "system",
-                    "content": [{"type": "text", "text": system_instruction}],
-                },
-                {
-                    "role": "user",
-                    "content": [{"type": "input_text", "text": text}],
-                },
-            ],
-            "output_audio": {"voice": voice, "format": "mp3"},
-        }
+        use_ssml = True
+
+        def build_payload(with_ssml: bool) -> dict:
+            base_payload = {
+                "model": self.OPENAI_TTS_MODEL,
+                "voice": voice,
+                "format": "mp3",
+            }
+            if with_ssml:
+                base_payload["input_format"] = "ssml"
+                base_payload["input"] = self._build_ssml_input(text, tone_hint)
+            else:
+                base_payload["input"] = text
+            return base_payload
+
+        payload = build_payload(use_ssml)
         last_error: Exception | None = None
         audio_bytes: bytes | None = None
         for attempt in range(5):
@@ -276,11 +270,21 @@ class TTSService:
                     f"❌ OpenAI HTTPError "
                     f"{response.status_code if response else '??'}: {body[:500]}"
                 )
+                if (
+                    response is not None
+                    and response.status_code == 400
+                    and "input_format" in body.lower()
+                    and use_ssml
+                ):
+                    print("⚠️ OpenAI rejected SSML input, falling back to plain text.")
+                    use_ssml = False
+                    payload = build_payload(use_ssml)
+                    last_error = exc
+                    continue
                 last_error = exc
                 break
 
-            data = response.json()
-            audio_bytes = self._extract_openai_audio(data)
+            audio_bytes = response.content
             break
         else:
             if last_error:
@@ -293,16 +297,37 @@ class TTSService:
         audio_url = storage_client.put_bytes(key, audio_bytes, "audio/mpeg")
         return TTSResult(audio_url=audio_url, word_times=self._approximate_word_times(text))
 
-    def _extract_openai_audio(self, payload: dict) -> bytes | None:
-        outputs = payload.get("output") or []
-        for message in outputs:
-            for item in message.get("content") or []:
-                if item.get("type") == "audio":
-                    audio_info = item.get("audio") or {}
-                    data = audio_info.get("data")
-                    if data:
-                        return base64.b64decode(data)
-        return None
+    def _build_ssml_input(self, text: str, tone_hint: str | None) -> str:
+        cleaned = text.strip()
+        escaped = html.escape(cleaned)
+        lower_hint = (tone_hint or "").lower()
+        pitch = "0%"
+        rate = "1.0"
+
+        if cleaned.endswith("?"):
+            pitch = "+6%"
+            rate = "1.04"
+        elif cleaned.endswith("!"):
+            pitch = "+4%"
+            rate = "1.05"
+        elif "..." in cleaned:
+            pitch = "-2%"
+            rate = "0.94"
+
+        if any(keyword in lower_hint for keyword in ["dramatic", "intense", "command"]):
+            pitch = "+2%"
+            rate = "0.96"
+        if any(keyword in lower_hint for keyword in ["calm", "soft", "gentle"]):
+            pitch = "-3%"
+            rate = "0.92"
+        if any(keyword in lower_hint for keyword in ["angry", "shout", "furious"]):
+            pitch = "+8%"
+            rate = "1.08"
+        if "whisper" in lower_hint:
+            pitch = "-4%"
+            rate = "0.9"
+
+        return f"<speak><prosody pitch=\"{pitch}\" rate=\"{rate}\">{escaped}</prosody></speak>"
 
     def _fallback_tts(self, text: str, voice_id: str) -> TTSResult:
         # Return an empty audio URL so the frontend falls back to Web Speech API with the actual text
