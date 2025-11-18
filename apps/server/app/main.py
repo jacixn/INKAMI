@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from app.api.routes import bubbles, chapters, jobs
+from app.api.routes import bubbles, chapters, jobs, speakers
 from app.core.config import settings
 
 app = FastAPI(title="Inkami API", version="0.1.0")
@@ -40,4 +40,5 @@ async def health() -> dict[str, str]:
 app.include_router(chapters.router, prefix="/api/chapters", tags=["chapters"])
 app.include_router(jobs.router, prefix="/api/jobs", tags=["jobs"])
 app.include_router(bubbles.router, prefix="/api/bubbles", tags=["bubbles"])
+app.include_router(speakers.router, prefix="/api/speakers", tags=["speakers"])
 

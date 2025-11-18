@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useSWRConfig } from "swr";
 import type { PlaybackController } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -19,6 +20,7 @@ const voiceOptions = [
 
 export default function VoiceInspector({ controller }: Props) {
   const [message, setMessage] = useState<string | null>(null);
+  const { mutate } = useSWRConfig();
 
   const roster = useMemo(() => {
     const entries = new Map<
@@ -54,7 +56,10 @@ export default function VoiceInspector({ controller }: Props) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ voice_id: newVoice })
       });
-      setMessage("Voice updated. Reload chapter to refresh audio.");
+      if (controller.chapterId && controller.chapterId !== "demo") {
+        await mutate(`/api/chapters/${controller.chapterId}`);
+      }
+      setMessage("Voice updated.");
     } catch (error) {
       setMessage(
         error instanceof Error ? error.message : "Voice update failed."

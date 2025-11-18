@@ -82,9 +82,9 @@ export default function ReaderCanvas({ controller, variant = "default" }: Props)
                   y={y1}
                   width={width}
                   height={height}
-                  fill={active ? "rgba(255,255,255,0.08)" : "transparent"}
-                  stroke={active ? "#8b9bff" : "rgba(255,255,255,0.35)"}
-                  strokeWidth={active ? 3 : 1}
+                  fill="transparent"
+                  stroke="transparent"
+                  strokeWidth={1}
                   rx={8}
                 />
               </g>

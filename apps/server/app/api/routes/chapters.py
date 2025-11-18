@@ -29,7 +29,7 @@ async def create_chapter(
     upload_dir = Path(settings.upload_dir)
     upload_dir.mkdir(parents=True, exist_ok=True)
 
-    saved_files: list[dict[str, str]] = []
+    saved_files: list[dict[str, str | int | None]] = []
     base_url = str(request.base_url).rstrip("/")
     parsed = urlparse(base_url)
     if parsed.scheme == "http":
@@ -50,13 +50,26 @@ async def create_chapter(
         except Exception:
             width = height = None
         saved_files.append(
-            {"filename": storage_name, "image_url": public_url, "width": width, "height": height}
+            {
+                "filename": storage_name,
+                "image_url": public_url,
+                "width": width,
+                "height": height,
+                "path": str(file_path),
+            }
         )
 
     if not saved_files:
         placeholder = f"{base_url}/static/placeholder-page.png"
+        placeholder_path = Path(__file__).resolve().parent.parent / "static" / "placeholder-page.png"
         saved_files.append(
-            {"filename": "placeholder-page.png", "image_url": placeholder, "width": 1080, "height": 1920}
+            {
+                "filename": "placeholder-page.png",
+                "image_url": placeholder,
+                "width": 1080,
+                "height": 1920,
+                "path": str(placeholder_path),
+            }
         )
 
     job_id = enqueue_chapter_job(chapter_id, saved_files)

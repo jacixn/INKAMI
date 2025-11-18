@@ -11,7 +11,7 @@ WORKDIR /app
 
 # System deps for scientific/python tooling
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends build-essential libgl1 && \
+    apt-get install -y --no-install-recommends build-essential libgl1 tesseract-ocr && \
     rm -rf /var/lib/apt/lists/*
 
 # Install Poetry + deps

@@ -5,6 +5,7 @@ from redis import Redis
 
 from app.core.config import settings
 from app.models.schemas import ChapterPayload, JobStatus, SpeakerUpdate
+from app.services.tts import tts_service
 
 
 def _redis_client() -> Redis:
@@ -64,6 +65,9 @@ class ChapterStore:
                         updated = True
                     if patch.voice_id is not None:
                         bubble.voice_id = patch.voice_id
+                        tts_result = tts_service.synthesize(bubble.text, bubble.voice_id)
+                        bubble.audio_url = tts_result.audio_url
+                        bubble.word_times = tts_result.word_times
                         updated = True
             if updated:
                 self.redis.hset(self.chapter_key, chapter_id, chapter.model_dump_json())
