@@ -181,10 +181,19 @@ class OCRService:
             int(width * 0.95),
             int(height * 0.75),
         )
+        print(f"🔎 Scanning panel region: {panel_region} on {width}x{height} image")
         panel_text = _extract_text_from_region(panel_region)
-        if panel_text and len(panel_text) > 8:
-            # Check if this is likely UI text (contains system keywords)
-            if any(keyword in panel_text.upper() for keyword in ui_keywords):
+        print(f"🔎 Panel OCR result: '{panel_text}' (length: {len(panel_text)})")
+        
+        if panel_text and len(panel_text) > 5:  # Lowered threshold from 8 to 5
+            print(f"🔎 Checking for UI keywords in: {panel_text.upper()}")
+            # Check if this is likely UI text (contains system keywords OR has junk characters)
+            has_ui_keywords = any(keyword in panel_text.upper() for keyword in ui_keywords)
+            # Also accept if it's gibberish (OCR failed on colored background)
+            is_gibberish = any(char in panel_text for char in ["\\", "|"]) or len(panel_text.split()) < 3
+            
+            if has_ui_keywords or is_gibberish:
+                print(f"✅ Adding panel as UI element (keywords: {has_ui_keywords}, gibberish: {is_gibberish})")
                 ui_bubbles.append(
                     DetectedBubble(
                         bubble_id="ui_panel",
@@ -193,6 +202,8 @@ class OCRService:
                         kind="narration",
                     )
                 )
+            else:
+                print(f"❌ Panel text rejected (no UI keywords or gibberish pattern)")
         
         # Check bottom region for UI text (bottom 20% of image)
         bottom_region = (0, int(height * 0.8), width, height)
