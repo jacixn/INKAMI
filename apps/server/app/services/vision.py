@@ -460,7 +460,7 @@ class VisionService:
                         {"type": "input_text", "text": prompt},
                         {
                             "type": "input_image",
-                            "image_url": {"url": f"data:image/png;base64,{img_base64}"},
+                            "image_url": f"data:image/png;base64,{img_base64}",
                         },
                     ],
                 }

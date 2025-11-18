@@ -52,7 +52,7 @@ def process_chapter(chapter_id: str, files: list[ChapterFile], job_id: str | Non
 
         # 🤖 USE DEEPSEEK VISION API TO DETECT AND READ ALL TEXT
         # OCR completely removed - Vision AI does everything!
-        print(f"🤖 Using DeepSeek Vision API to read page {index}")
+        print(f"🤖 Using GPT-4o-mini Vision API to read page {index}")
         vision_bubbles = vision_service.detect_and_read_all_bubbles(image_path)
         
         if not vision_bubbles:
@@ -71,7 +71,7 @@ def process_chapter(chapter_id: str, files: list[ChapterFile], job_id: str | Non
             ]
         
         print(f"✨ Vision API found {len(vision_bubbles)} text elements")
-        
+
         items: list[BubbleItem] = []
         for bubble_idx, (bubble_box, text, analysis) in enumerate(vision_bubbles):
             normalized_text = _normalize_text(text)
