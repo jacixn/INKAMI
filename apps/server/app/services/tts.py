@@ -241,6 +241,7 @@ class TTSService:
             system_instruction += f" For this specific line: {tone_hint.strip()}"
         payload = {
             "model": self.OPENAI_TTS_MODEL,
+            "modalities": ["text", "audio"],
             "input": [
                 {
                     "role": "system",
@@ -251,7 +252,7 @@ class TTSService:
                     "content": [{"type": "input_text", "text": text}],
                 },
             ],
-            "audio": {"voice": voice, "format": "mp3"},
+            "output_audio": {"voice": voice, "format": "mp3"},
         }
         last_error: Exception | None = None
         audio_bytes: bytes | None = None
