@@ -31,8 +31,8 @@ class TTSService:
         "voice_adult_m": "TxGEqnHWrfWFTfGW9XjX",  # Josh - mature deep voice
         
         # Special voices
-        "voice_narrator": "56bWURjYFHyYyVf490Dp",  # User-selected female narrator
-        "voice_narrator_male": "6pVydnYcVtMsrrSeUKs6",  # User-selected male narrator
+        "voice_narrator": "EXAVITQu4vr4xnSDxMaL",  # Sarah - natural clear narrator
+        "voice_narrator_male": "pNInz6obpgDQGcFmaJgB",  # Josh B - warm, grounded narrator
         "voice_system": "CwhRBWXzGAHq8TQ4Fs17",  # Roger - calm, precise system tone
         "voice_sfx": "N2lVS1w4EtoT3dr4eOWO",  # Callum - punchy FX cues
     }
