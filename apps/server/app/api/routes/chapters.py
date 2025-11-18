@@ -3,6 +3,7 @@ from __future__ import annotations
 import uuid
 from pathlib import Path
 from typing import Annotated
+from urllib.parse import urlparse, urlunparse
 
 from fastapi import APIRouter, File, HTTPException, Request, UploadFile, status
 
@@ -28,6 +29,9 @@ async def create_chapter(
 
     saved_files: list[dict[str, str]] = []
     base_url = str(request.base_url).rstrip("/")
+    parsed = urlparse(base_url)
+    if parsed.scheme == "http":
+        base_url = urlunparse(parsed._replace(scheme="https"))
     for index, file in enumerate(files):
         content = await file.read()
         if not content:
