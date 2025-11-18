@@ -21,7 +21,7 @@ router = APIRouter()
 async def create_chapter(
     request: Request,
     files: Annotated[list[UploadFile], File(..., description="Chapter archive/pages")],
-    processing_mode: Annotated[str | None, Form("processing_mode")] = None,
+    processing_mode: str = Form("bring_to_life"),
 ) -> dict[str, str]:
     if not files:
         raise HTTPException(status_code=400, detail="No files uploaded.")
