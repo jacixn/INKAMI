@@ -16,8 +16,7 @@ const demoChapter: ChapterPayload = {
   pages: [
     {
       page_index: 0,
-      image_url:
-        "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=900&q=80",
+      image_url: "/demo-page.webp",
       items: [
         {
           bubble_id: "demo-bubble-1",
