@@ -12,6 +12,7 @@ const demoChapter: ChapterPayload = {
   title: "Demo Chapter",
   status: "ready",
   progress: 100,
+  processing_mode: "bring_to_life",
   pages: [
     {
       page_index: 0,
