@@ -29,6 +29,8 @@ class BubbleItem(BaseModel):
 class PagePayload(BaseModel):
     page_index: int
     image_url: str
+    width: int | None = None
+    height: int | None = None
     items: list[BubbleItem]
     reading_order: list[str]
 

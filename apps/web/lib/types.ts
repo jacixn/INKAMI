@@ -22,6 +22,8 @@ export interface BubbleItem {
 export interface PagePayload {
   page_index: number;
   image_url: string;
+  width?: number | null;
+  height?: number | null;
   items: BubbleItem[];
   reading_order: string[];
 }

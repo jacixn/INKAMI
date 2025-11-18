@@ -147,6 +147,8 @@ export function usePlaybackController(chapterId: string): ControllerState {
   const [speed, setSpeed] = useState(1);
   const [errors, setErrors] = useState<string[]>([]);
   const audioRef = useRef<HTMLAudioElement>();
+  const speechRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const nextBubbleRef = useRef<() => void>(() => {});
 
   const pages = chapterData?.pages ?? [];
 
@@ -170,6 +172,30 @@ export function usePlaybackController(chapterId: string): ControllerState {
   const currentPage = pages[currentPageIndex];
   const readingOrder = currentPage?.reading_order ?? [];
 
+  useEffect(() => {
+    const page = pages[currentPageIndex];
+    if (!page) return;
+    const valid = page.items.some((item) => item.bubble_id === currentBubbleId);
+    if (!valid) {
+      const fallback = page.reading_order?.[0] ?? page.items[0]?.bubble_id;
+      if (fallback) {
+        setCurrentBubbleId(fallback);
+      }
+    }
+  }, [pages, currentPageIndex, currentBubbleId]);
+
+  useEffect(() => {
+    setCurrentPageIndex(0);
+    setCurrentBubbleId(undefined);
+    setIsPlaying(false);
+  }, [chapterId]);
+
+  const cancelSpeech = () => {
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+    window.speechSynthesis.cancel();
+    speechRef.current = null;
+  };
+
   const loadAudio = useCallback(
     async (bubbleId?: string) => {
       if (!bubbleId) return;
@@ -178,13 +204,42 @@ export function usePlaybackController(chapterId: string): ControllerState {
 
       if (audioRef.current) {
         audioRef.current.pause();
+        audioRef.current = undefined;
+      }
+      cancelSpeech();
+
+      const shouldUseSpeech =
+        (!target.bubble.audio_url || target.bubble.audio_url.startsWith("data:audio")) &&
+        typeof window !== "undefined" &&
+        "speechSynthesis" in window;
+
+      if (shouldUseSpeech) {
+        const utterance = new SpeechSynthesisUtterance(target.bubble.text);
+        utterance.rate = speed;
+        utterance.onend = () => {
+          speechRef.current = null;
+          setIsPlaying(false);
+          nextBubbleRef.current();
+        };
+        utterance.onerror = (event) => {
+          speechRef.current = null;
+          setErrors((prev) => [
+            ...prev,
+            event.error ?? `Speech playback failed for ${bubbleId}`
+          ]);
+          setIsPlaying(false);
+        };
+        speechRef.current = utterance;
+        window.speechSynthesis.speak(utterance);
+        setIsPlaying(true);
+        return;
       }
 
       const audio = new Audio(target.bubble.audio_url);
       audio.playbackRate = speed;
       audio.onended = () => {
         setIsPlaying(false);
-        nextBubble();
+        nextBubbleRef.current();
       };
       audio.onerror = () => {
         setErrors((prev) => [...prev, `Audio failed for ${bubbleId}`]);
@@ -233,7 +288,9 @@ export function usePlaybackController(chapterId: string): ControllerState {
   }, [currentBubbleId, loadAudio, readingOrder]);
 
   const pause = useCallback(() => {
+    cancelSpeech();
     audioRef.current?.pause();
+    audioRef.current = undefined;
     setIsPlaying(false);
   }, []);
 
@@ -269,8 +326,13 @@ export function usePlaybackController(chapterId: string): ControllerState {
   }, [speed]);
 
   useEffect(() => {
+    nextBubbleRef.current = () => nextBubble();
+  }, [nextBubble]);
+
+  useEffect(() => {
     return () => {
       audioRef.current?.pause();
+      cancelSpeech();
     };
   }, []);
 

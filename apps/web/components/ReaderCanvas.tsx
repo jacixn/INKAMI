@@ -26,6 +26,10 @@ export default function ReaderCanvas({ controller, variant = "default" }: Props)
     );
   }
 
+  const viewWidth = page.width && page.width > 0 ? page.width : 1080;
+  const viewHeight = page.height && page.height > 0 ? page.height : 1920;
+  const aspectRatio = viewWidth / viewHeight;
+
   return (
     <section className={cn(immersive ? "" : "card")}>
       {!immersive && (
@@ -48,18 +52,19 @@ export default function ReaderCanvas({ controller, variant = "default" }: Props)
       )}
       <div
         className={cn(
-          "relative mx-auto aspect-[9/16] w-full overflow-hidden rounded-[28px] border border-white/10 bg-black/60",
+          "relative mx-auto w-full overflow-hidden rounded-[28px] border border-white/10 bg-black/60",
           immersive ? "max-w-[720px]" : "max-w-[520px]"
         )}
+        style={{ aspectRatio }}
       >
         <Image
           src={page.image_url}
           alt={`Page ${page.page_index + 1}`}
           fill
-          sizes="520px"
+          sizes="(min-width: 768px) 520px, 90vw"
           className="object-contain"
         />
-        <svg className="absolute inset-0 h-full w-full" viewBox="0 0 1080 1920">
+        <svg className="absolute inset-0 h-full w-full" viewBox={`0 0 ${viewWidth} ${viewHeight}`}>
           {page.items.map((item) => {
             const [x1, y1, x2, y2] = item.bubble_box;
             const width = x2 - x1;

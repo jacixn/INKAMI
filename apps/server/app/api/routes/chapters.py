@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import uuid
+from io import BytesIO
 from pathlib import Path
 from typing import Annotated
 from urllib.parse import urlparse, urlunparse
 
 from fastapi import APIRouter, File, HTTPException, Request, UploadFile, status
+from PIL import Image
 
 from app.core.config import settings
 from app.models.schemas import ChapterPayload
@@ -41,11 +43,21 @@ async def create_chapter(
         file_path = upload_dir / storage_name
         file_path.write_bytes(content)
         public_url = f"{base_url}/uploads/{storage_name}"
-        saved_files.append({"filename": storage_name, "image_url": public_url})
+        width = height = None
+        try:
+            with Image.open(BytesIO(content)) as img:
+                width, height = img.size
+        except Exception:
+            width = height = None
+        saved_files.append(
+            {"filename": storage_name, "image_url": public_url, "width": width, "height": height}
+        )
 
     if not saved_files:
         placeholder = f"{base_url}/static/placeholder-page.png"
-        saved_files.append({"filename": "placeholder-page.png", "image_url": placeholder})
+        saved_files.append(
+            {"filename": "placeholder-page.png", "image_url": placeholder, "width": 1080, "height": 1920}
+        )
 
     job_id = enqueue_chapter_job(chapter_id, saved_files)
 
