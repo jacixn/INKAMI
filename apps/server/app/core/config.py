@@ -8,6 +8,7 @@ class Settings(BaseSettings):
 
     app_env: str = "dev"
     frontend_url: str = "http://localhost:3000"
+    upload_dir: str = "/tmp/inkami/uploads"
     database_url: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/inkami"
     redis_url: str = "redis://localhost:6379/0"
     job_queue_name: str = "inkami"

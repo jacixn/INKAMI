@@ -1,7 +1,9 @@
+from pathlib import Path
 from urllib.parse import urlparse
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from app.api.routes import bubbles, chapters, jobs
 from app.core.config import settings
@@ -20,6 +22,14 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+uploads_path = Path(settings.upload_dir)
+uploads_path.mkdir(parents=True, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=uploads_path), name="uploads")
+
+static_path = Path(__file__).resolve().parent / "static"
+static_path.mkdir(parents=True, exist_ok=True)
+app.mount("/static", StaticFiles(directory=static_path), name="static")
 
 
 @app.get("/health", tags=["meta"])
