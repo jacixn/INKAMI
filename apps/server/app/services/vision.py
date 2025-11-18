@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import base64
+import json
+import random
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -35,91 +37,80 @@ class VisionService:
     def analyze_bubble(self, image_path: Path, text: str, bubble_box: list[int]) -> CharacterAnalysis:
         """Analyze a speech bubble and determine character emotion and voice."""
         
-        if not settings.deepseek_api_key:
-            print("⚠️ DeepSeek API key not set, using default voice selection")
-            return self._fallback_analysis()
+        # For now, use smart text analysis to determine emotion and voice
+        # This is a temporary solution until we get vision API working properly
+        return self._analyze_from_text(text, bubble_box)
 
-        try:
-            # Read and encode the image
-            with open(image_path, "rb") as f:
-                image_data = base64.b64encode(f.read()).decode()
-
-            # Create the prompt for DeepSeek
-            prompt = f"""Analyze this manga/manhwa panel and the speech bubble containing: "{text}"
-
-The speech bubble is located at coordinates: {bubble_box}
-
-Provide a JSON response with:
-1. character_type: Describe the character (e.g., "young_female", "tough_male", "wise_elder", "child", "villain")
-2. emotion: Current emotion (e.g., "confused", "angry", "excited", "sad", "scared", "happy", "neutral", "worried")
-3. tone: How they're speaking (e.g., "questioning", "assertive", "timid", "dramatic", "sarcastic", "whisper", "shout")
-4. voice_archetype: Best voice match (choose from: "young_female_warm", "young_female_cool", "male_confident", "male_stoic", "androgynous_mysterious", "narrator")
-5. expressiveness: How expressive should the voice be? (0.0-1.0, where 0.0 is very expressive/emotional, 1.0 is monotone/flat)
-
-Only respond with valid JSON, no other text."""
-
-            # Call DeepSeek API
-            response = requests.post(
-                "https://api.deepseek.com/v1/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {settings.deepseek_api_key}",
-                    "Content-Type": "application/json",
-                },
-                json={
-                    "model": "deepseek-chat",
-                    "messages": [
-                        {
-                            "role": "user",
-                            "content": [
-                                {
-                                    "type": "image_url",
-                                    "image_url": {
-                                        "url": f"data:image/jpeg;base64,{image_data}"
-                                    }
-                                },
-                                {
-                                    "type": "text",
-                                    "text": prompt
-                                }
-                            ]
-                        }
-                    ],
-                    "temperature": 0.3,
-                    "max_tokens": 500,
-                },
-                timeout=30,
-            )
-            
-            response.raise_for_status()
-            result = response.json()
-            
-            # Parse the AI response
-            content = result["choices"][0]["message"]["content"]
-            import json
-            analysis = json.loads(content)
-            
-            # Map to our voice system
-            voice_archetype = analysis.get("voice_archetype", "narrator")
-            voice_id = self.VOICE_MAPPING.get(voice_archetype, "voice_narrator")
-            
-            # Convert expressiveness to stability (inverse relationship)
-            expressiveness = float(analysis.get("expressiveness", 0.5))
-            stability = expressiveness  # More expressive = lower stability
-            
-            print(f"🎭 AI Analysis: {analysis['character_type']} - {analysis['emotion']} ({analysis['tone']}) → {voice_id}")
-            
-            return CharacterAnalysis(
-                character_type=analysis.get("character_type", "unknown"),
-                emotion=analysis.get("emotion", "neutral"),
-                tone=analysis.get("tone", "normal"),
-                voice_suggestion=voice_id,
-                stability=stability,
-                similarity_boost=0.75,  # Default good value
-            )
-
-        except Exception as e:
-            print(f"❌ Vision analysis failed: {type(e).__name__}: {str(e)}")
-            return self._fallback_analysis()
+    def _analyze_from_text(self, text: str, bubble_box: list[int]) -> CharacterAnalysis:
+        """Analyze text content to determine character type and emotion."""
+        
+        text_lower = text.lower()
+        
+        # Detect emotion from text patterns
+        emotion = "neutral"
+        tone = "normal"
+        stability = 0.5
+        
+        # Question marks suggest confusion/uncertainty
+        if "?" in text:
+            if "...?" in text or "??" in text:
+                emotion = "confused"
+                tone = "questioning"
+                stability = 0.3  # More expressive
+            else:
+                tone = "questioning"
+                stability = 0.4
+        
+        # Exclamation marks suggest excitement/anger
+        if "!" in text:
+            if "!!" in text or "!!!" in text:
+                emotion = "excited" if len(text) < 50 else "angry"
+                tone = "dramatic"
+                stability = 0.2  # Very expressive
+            else:
+                emotion = "assertive"
+                tone = "emphatic"
+                stability = 0.35
+        
+        # Ellipsis suggests thoughtfulness/uncertainty
+        if "..." in text:
+            emotion = "thoughtful"
+            tone = "contemplative"
+            stability = 0.4
+        
+        # Detect character type from speech patterns
+        voice_archetype = "narrator"
+        
+        # Short, questioning text often suggests younger character
+        if len(text) < 100 and "?" in text:
+            voice_archetype = "young_female_warm"
+        # Authoritative statements suggest confident character
+        elif any(word in text_lower for word in ["must", "will", "shall", "command"]):
+            voice_archetype = "male_confident"
+        # Gentle or emotional words suggest warm character
+        elif any(word in text_lower for word in ["please", "sorry", "hope", "wish", "feel"]):
+            voice_archetype = "young_female_warm"
+        # Cool analytical words
+        elif any(word in text_lower for word in ["analyze", "observe", "calculate", "precisely"]):
+            voice_archetype = "young_female_cool"
+        
+        # Position can hint at character type (top = narrator, middle = dialogue)
+        if bubble_box[1] < 200:  # Near top
+            voice_archetype = "narrator"
+            stability = 0.6  # More stable for narration
+        
+        voice_id = self.VOICE_MAPPING.get(voice_archetype, "voice_narrator")
+        
+        print(f"🎭 Text Analysis: {emotion} ({tone}) → {voice_id} [stability: {stability}]")
+        
+        return CharacterAnalysis(
+            character_type="analyzed_from_text",
+            emotion=emotion,
+            tone=tone,
+            voice_suggestion=voice_id,
+            stability=stability,
+            similarity_boost=0.75,
+        )
 
     def _fallback_analysis(self) -> CharacterAnalysis:
         """Fallback when AI analysis isn't available."""
