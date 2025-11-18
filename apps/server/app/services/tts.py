@@ -32,7 +32,8 @@ class TTSService:
         
         # Special voices
         "voice_narrator": "EXAVITQu4vr4xnSDxMaL",  # Sarah - clear narrator
-        "voice_system": "ErXwobaYiN019PkySvjV",  # Domi - neutral system voice
+        "voice_system": "CwhRBWXzGAHq8TQ4Fs17",  # Roger - calm, precise system tone
+        "voice_sfx": "N2lVS1w4EtoT3dr4eOWO",  # Callum - punchy FX cues
     }
     
     VOICE_DISPLAY_NAMES = {
@@ -44,9 +45,25 @@ class TTSService:
         "voice_adult_m": "Mature Man",
         "voice_narrator": "Narrator",
         "voice_system": "System Voice",
+        "voice_sfx": "FX Voice",
     }
     
     ELEVEN_MODEL = "eleven_multilingual_v2"
+    
+    VOICE_SETTINGS_OVERRIDES = {
+        "voice_system": {
+            "stability": 0.92,
+            "similarity_boost": 0.25,
+            "style": 0.4,
+            "use_speaker_boost": False,
+        },
+        "voice_sfx": {
+            "stability": 0.3,
+            "similarity_boost": 0.9,
+            "style": 0.75,
+            "use_speaker_boost": True,
+        },
+    }
 
     def synthesize(self, text: str, voice_id: str, stability: float = 0.5, similarity_boost: float = 0.75) -> TTSResult:
         print(f"🔊 TTS Request: text='{text[:50]}...' voice={voice_id} stability={stability}")
@@ -88,15 +105,20 @@ class TTSService:
             "Accept": "audio/mpeg",
             "Content-Type": "application/json",
         }
+        voice_settings = {
+            "stability": stability,
+            "similarity_boost": similarity_boost,
+            "style": 0.0,
+            "use_speaker_boost": True,
+        }
+        override = self.VOICE_SETTINGS_OVERRIDES.get(voice_id)
+        if override:
+            voice_settings.update(override)
+        
         payload = {
             "text": text,
             "model_id": self.ELEVEN_MODEL,
-            "voice_settings": {
-                "stability": stability,
-                "similarity_boost": similarity_boost,
-                "style": 0.0,  # Use default style
-                "use_speaker_boost": True  # Enhance voice clarity
-            },
+            "voice_settings": voice_settings,
         }
         response = requests.post(url, headers=headers, json=payload, timeout=60)
         response.raise_for_status()

@@ -46,6 +46,12 @@ const voices = [
     name: "System Voice",
     tone: "UI/System",
     traits: "Neutral, precise, informative"
+  },
+  {
+    id: "voice_sfx",
+    name: "FX Voice",
+    tone: "Sound Effects",
+    traits: "Impact hits, stylized cues"
   }
 ];
 

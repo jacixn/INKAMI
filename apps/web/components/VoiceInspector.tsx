@@ -17,7 +17,8 @@ const voiceOptions = [
   { id: "voice_young_m", label: "Young Man • Hero" },
   { id: "voice_adult_m", label: "Mature Man • Warrior" },
   { id: "voice_narrator", label: "Narrator • Story" },
-  { id: "voice_system", label: "System Voice • UI" }
+  { id: "voice_system", label: "System Voice • UI" },
+  { id: "voice_sfx", label: "FX Voice • Effects" }
 ];
 
 export default function VoiceInspector({ controller }: Props) {

@@ -47,7 +47,7 @@ def _bubble_kind_from_analysis(analysis: CharacterAnalysis) -> str:
         return "narration"
     if "thought" in descriptor:
         return "thought"
-    if "sfx" in descriptor or "sound" in descriptor:
+    if "sfx" in descriptor or "sound" in descriptor or "fx" in descriptor:
         return "sfx"
     return "dialogue"
 

@@ -228,6 +228,8 @@ class VisionService:
     def _map_voice_key(self, gender: str, age: str, bubble_type: str) -> str:
         if bubble_type in {"system", "ui", "computer", "hud"}:
             return "system"
+        if bubble_type in {"sfx", "fx", "effect", "sound"}:
+            return "sfx"
         if bubble_type in {"narration", "narrator"}:
             return "narrator"
 
