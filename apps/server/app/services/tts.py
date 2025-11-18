@@ -29,7 +29,7 @@ class TTSService:
     }
     ELEVEN_MODEL = "eleven_multilingual_v2"
 
-    def synthesize(self, text: str, voice_id: str) -> TTSResult:
+    def synthesize(self, text: str, voice_id: str, stability: float = 0.5, similarity_boost: float = 0.75) -> TTSResult:
         provider_chain = [
             provider.strip()
             for provider in settings.tts_provider_priority.split(",")
@@ -38,7 +38,7 @@ class TTSService:
         for provider in provider_chain:
             if provider == "elevenlabs" and settings.elevenlabs_api_key:
                 try:
-                    return self._synthesize_elevenlabs(text, voice_id)
+                    return self._synthesize_elevenlabs(text, voice_id, stability, similarity_boost)
                 except Exception as e:
                     print(f"❌ ElevenLabs TTS failed: {type(e).__name__}: {str(e)}")
                     continue
@@ -55,7 +55,7 @@ class TTSService:
             cursor += duration
         return payload
 
-    def _synthesize_elevenlabs(self, text: str, voice_id: str) -> TTSResult:
+    def _synthesize_elevenlabs(self, text: str, voice_id: str, stability: float = 0.5, similarity_boost: float = 0.75) -> TTSResult:
         resolved_voice = self.ELEVEN_VOICE_MAP.get(voice_id, self.ELEVEN_VOICE_MAP["voice_narrator"])
         url = f"https://api.elevenlabs.io/v1/text-to-speech/{resolved_voice}"
         headers = {
@@ -66,7 +66,12 @@ class TTSService:
         payload = {
             "text": text,
             "model_id": self.ELEVEN_MODEL,
-            "voice_settings": {"stability": 0.4, "similarity_boost": 0.8},
+            "voice_settings": {
+                "stability": stability,
+                "similarity_boost": similarity_boost,
+                "style": 0.0,  # Use default style
+                "use_speaker_boost": True  # Enhance voice clarity
+            },
         }
         response = requests.post(url, headers=headers, json=payload, timeout=60)
         response.raise_for_status()

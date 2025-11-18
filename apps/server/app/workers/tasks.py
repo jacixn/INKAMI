@@ -9,6 +9,7 @@ from app.services.ocr import DetectedBubble, ocr_service
 from app.services.pipeline import chapter_store
 from app.services.speaker import speaker_linker
 from app.services.tts import tts_service
+from app.services.vision import vision_service
 
 DEFAULT_VOICE = "voice_friendly_f"
 
@@ -50,10 +51,22 @@ def _bubble_to_item(
     page_width: int,
     page_height: int,
     bubble: DetectedBubble,
+    image_path: Path,
 ) -> BubbleItem:
     speaker_id = f"{chapter_id[:6]}_speaker_{page_index}_{bubble_index}"
-    assigned_voice = bubble.voice_hint or _voice_for_bubble(bubble_index)
-    tts_result = tts_service.synthesize(bubble.text, assigned_voice)
+    
+    # Use AI vision to analyze the bubble and determine voice/emotion
+    analysis = vision_service.analyze_bubble(image_path, bubble.text, list(bubble.box))
+    assigned_voice = analysis.voice_suggestion
+    
+    # Generate TTS with emotion parameters from AI analysis
+    tts_result = tts_service.synthesize(
+        bubble.text, 
+        assigned_voice,
+        stability=analysis.stability,
+        similarity_boost=analysis.similarity_boost
+    )
+    
     return BubbleItem(
         bubble_id=f"bubble_{page_index}_{bubble_index}",
         panel_box=[0, 0, page_width, page_height],
@@ -118,6 +131,7 @@ def process_chapter(chapter_id: str, files: list[ChapterFile], job_id: str | Non
                     page_width=page_width,
                     page_height=page_height,
                     bubble=bubble,
+                    image_path=image_path,
                 )
             )
 
