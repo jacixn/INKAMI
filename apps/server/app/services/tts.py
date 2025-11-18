@@ -59,17 +59,17 @@ class TTSService:
     OPENAI_TTS_MODEL = "gpt-4o-mini-tts"
 
     OPENAI_VOICE_MAP = {
-        "voice_child_f": "luna",
-        "voice_young_f": "sol",
+        "voice_child_f": "nova",
+        "voice_young_f": "shimmer",
         "voice_adult_f": "verse",
-        "voice_child_m": "ember",
+        "voice_child_m": "echo",
         "voice_young_m": "alloy",
-        "voice_adult_m": "sage",
-        "voice_narrator_f": "verse",
+        "voice_adult_m": "onyx",
+        "voice_narrator_f": "ballad",
         "voice_narrator_m": "sage",
-        "voice_narrator": "verse",
+        "voice_narrator": "ballad",
         "voice_system": "ash",
-        "voice_sfx": "ballad",
+        "voice_sfx": "coral",
     }
 
     VOICE_SETTINGS_OVERRIDES = {
@@ -234,6 +234,7 @@ class TTSService:
             "format": "mp3",
         }
         last_error: Exception | None = None
+        audio_bytes: bytes | None = None
         for attempt in range(5):
             response = requests.post(url, headers=headers, json=payload, timeout=60)
             if response.status_code == 429:
