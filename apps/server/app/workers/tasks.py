@@ -83,11 +83,19 @@ def process_chapter(
 
         # 🤖 USE DEEPSEEK VISION API TO DETECT AND READ ALL TEXT
         # OCR completely removed - Vision AI does everything!
-        print(f"🤖 Using GPT-4o-mini Vision API to read page {index}")
-        vision_bubbles = vision_service.detect_and_read_all_bubbles(image_path)
+        print(f"🤖 Using GPT-4o-mini Vision API to read page {index} (mode: {processing_mode})")
+        print(f"📁 Image path: {image_path}, exists: {image_path.exists()}")
+        
+        try:
+            vision_bubbles = vision_service.detect_and_read_all_bubbles(image_path)
+        except Exception as e:
+            print(f"❌ Vision API call failed: {type(e).__name__}: {str(e)}")
+            import traceback
+            print(traceback.format_exc())
+            vision_bubbles = []
         
         if not vision_bubbles:
-            print("⚠️ Vision API found no bubbles, creating fallback")
+            print(f"⚠️ Vision API found no bubbles (mode: {processing_mode}), creating fallback")
             from app.services.vision import CharacterAnalysis
             fallback_analysis = CharacterAnalysis(
                 character_type="unknown",
@@ -102,7 +110,7 @@ def process_chapter(
                 ([100, 200, page_width - 100, 400], "No text detected on this page.", fallback_analysis)
             ]
         
-        print(f"✨ Vision API found {len(vision_bubbles)} text elements")
+        print(f"✨ Vision API found {len(vision_bubbles)} text elements (mode: {processing_mode})")
 
         items: list[BubbleItem] = []
         for bubble_idx, (bubble_box, text, analysis) in enumerate(vision_bubbles):
