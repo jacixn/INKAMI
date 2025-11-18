@@ -21,8 +21,7 @@ class CharacterAnalysis:
     voice_suggestion: str  # Which ElevenLabs voice to use
     stability: float  # 0.0-1.0, lower = more expressive
     similarity_boost: float  # 0.0-1.0, higher = more similar to original voice
-    style: float = 0.2  # 0.0-1.0, higher = more dramatic/style weight
-    style: float = 0.0  # 0.0-1.0 intensity for stylistic delivery
+    style: float = 0.2  # 0.0-1.0 intensity for stylistic delivery
 
 
 @dataclass
