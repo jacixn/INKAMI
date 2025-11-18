@@ -74,7 +74,7 @@ class VisionService:
                         "role": "user",
                         "content": [
                             {
-                                "type": "image",
+                                "type": "input_image",
                                 "image_url": f"data:image/png;base64,{img_base64}",
                             },
                             {
@@ -170,7 +170,7 @@ Do NOT add descriptions or commentary—only the raw text content."""
                         "role": "user",
                         "content": [
                             {
-                                "type": "image",
+                                "type": "input_image",
                                 "image_url": f"data:image/png;base64,{img_base64}",
                             },
                             {
@@ -534,7 +534,7 @@ Do NOT add descriptions or commentary—only the raw text content."""
                         "role": "user",
                         "content": [
                             {
-                                "type": "image",
+                                "type": "input_image",
                                 "image_url": f"data:image/png;base64,{img_base64}",
                             },
                             {
