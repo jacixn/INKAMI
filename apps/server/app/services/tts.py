@@ -250,13 +250,14 @@ class TTSService:
         payload = build_payload(use_ssml)
         last_error: Exception | None = None
         audio_bytes: bytes | None = None
-        for attempt in range(5):
+        max_attempts = 8
+        for attempt in range(max_attempts):
             response = requests.post(url, headers=headers, json=payload, timeout=60)
             if response.status_code == 429:
-                wait_time = min(2.0, 0.4 * (attempt + 1))
+                wait_time = min(20.0, 3.0 * (attempt + 1))
                 body = response.text if response is not None else ""
                 print(
-                    f"⚠️ OpenAI TTS rate limited (attempt {attempt + 1}/5). "
+                    f"⚠️ OpenAI TTS rate limited (attempt {attempt + 1}/{max_attempts}). "
                     f"Waiting {wait_time:.2f}s. Response: {body[:160]}"
                 )
                 last_error = requests.HTTPError(body, response=response)
