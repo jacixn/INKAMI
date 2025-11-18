@@ -22,7 +22,7 @@ httpx = "^0.27.2"
 redis = "^5.0.8"
 rq = "^1.16.2"
 boto3 = "^1.35.23"
-numpy = "^2.2.0"
+numpy = "^1.26.4"
 Pillow = "^10.4.0"
 tenacity = "^8.4.2"
 elevenlabs = "^1.8.1"
@@ -30,8 +30,6 @@ azure-cognitiveservices-speech = "^1.37.0"
 google-cloud-texttospeech = "^2.16.3"
 pytesseract = "^0.3.11"
 requests = "^2.32.3"
-opencv-python-headless = "^4.12.0"
-rapidocr-onnxruntime = "^1.2.3"
 
 [tool.poetry.group.vision]
 optional = true

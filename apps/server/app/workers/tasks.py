@@ -70,19 +70,15 @@ def _bubble_to_item(
         bubble_box=list(bubble.box),
         page_height=page_height,
     )
-    assigned_voice = bubble.voice_hint or analysis.voice_suggestion
+    assigned_voice = analysis.voice_suggestion
     normalized_text = _normalize_text(bubble.text)
-    stability = analysis.stability
-    similarity = analysis.similarity_boost
-    if bubble.voice_hint == "voice_narrator":
-        stability = max(stability, 0.65)
     
     # Generate TTS with emotion parameters from AI analysis
     tts_result = tts_service.synthesize(
         normalized_text,
         assigned_voice,
-        stability=stability,
-        similarity_boost=similarity,
+        stability=analysis.stability,
+        similarity_boost=analysis.similarity_boost,
     )
     
     return BubbleItem(
