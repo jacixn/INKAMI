@@ -28,16 +28,16 @@ class StorageClient:
 
     def put_bytes(self, key: str, data: bytes, content_type: str) -> str:
         try:
-        self._client.put_object(
+            self._client.put_object(
                 Bucket=self._bucket,
                 Key=key,
                 Body=data,
                 ContentType=content_type,
-        )
+            )
             # For Supabase storage, use the proper URL format
             if "supabase" in settings.s3_endpoint:
                 return f"{settings.s3_endpoint}/object/public/{self._bucket}/{key}"
-        return f"{settings.s3_endpoint}/{self._bucket}/{key}"
+            return f"{settings.s3_endpoint}/{self._bucket}/{key}"
         except Exception as e:
             print(f"❌ Storage upload failed: {type(e).__name__}: {str(e)}")
             # Return a data URL as fallback
