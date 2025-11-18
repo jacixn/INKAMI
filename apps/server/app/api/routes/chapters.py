@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Annotated
 from urllib.parse import urlparse, urlunparse
 
-from fastapi import APIRouter, File, HTTPException, Request, UploadFile, status
+from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile, status
 from PIL import Image
 
 from app.core.config import settings
@@ -21,6 +21,7 @@ router = APIRouter()
 async def create_chapter(
     request: Request,
     files: Annotated[list[UploadFile], File(..., description="Chapter archive/pages")],
+    processing_mode: Annotated[str | None, Form("processing_mode")] = None,
 ) -> dict[str, str]:
     if not files:
         raise HTTPException(status_code=400, detail="No files uploaded.")
@@ -72,7 +73,11 @@ async def create_chapter(
             }
         )
 
-    job_id = enqueue_chapter_job(chapter_id, saved_files)
+    mode = (processing_mode or "bring_to_life").strip().lower()
+    if mode not in {"bring_to_life", "narrate"}:
+        raise HTTPException(status_code=400, detail="Invalid processing mode.")
+
+    job_id = enqueue_chapter_job(chapter_id, saved_files, mode)  # type: ignore[arg-type]
 
     return {"chapter_id": chapter_id, "job_id": job_id}
 

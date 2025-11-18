@@ -34,6 +34,7 @@ export interface ChapterPayload {
   progress: number;
   title?: string;
   pages: PagePayload[];
+  processing_mode: "bring_to_life" | "narrate";
 }
 
 export interface PlaybackController {

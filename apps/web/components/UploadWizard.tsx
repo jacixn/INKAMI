@@ -22,6 +22,9 @@ export default function UploadWizard() {
   const [error, setError] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [isHovering, setIsHovering] = useState(false);
+  const [processingMode, setProcessingMode] = useState<"bring_to_life" | "narrate">(
+    "bring_to_life"
+  );
 
   const sizeText = useMemo(() => {
     const total = files.reduce((acc, file) => acc + file.size, 0);
@@ -52,6 +55,7 @@ export default function UploadWizard() {
     try {
       const formData = new FormData();
       files.forEach((file) => formData.append("files", file));
+      formData.append("processing_mode", processingMode);
 
       const response = await axios.post(`${apiBase}/api/chapters`, formData, {
         headers: { "Content-Type": "multipart/form-data" }
@@ -143,6 +147,57 @@ export default function UploadWizard() {
           </ul>
         </div>
       )}
+
+      <div className="rounded-2xl border border-white/10 bg-black/30 p-4 text-left">
+        <p className="text-xs uppercase tracking-[0.3em] text-white/50">
+          Playback style
+        </p>
+        <h3 className="mt-2 text-lg font-semibold text-white">
+          How should this chapter sound?
+        </h3>
+        <div className="mt-4 flex flex-col gap-3 text-sm text-white/80">
+          <label
+            className={`rounded-2xl border px-4 py-3 transition ${
+              processingMode === "bring_to_life"
+                ? "border-purple-400/80 bg-white/10"
+                : "border-white/10 bg-black/20"
+            }`}
+          >
+            <input
+              type="radio"
+              name="processing-mode"
+              value="bring_to_life"
+              className="mr-3 accent-purple-400"
+              checked={processingMode === "bring_to_life"}
+              onChange={() => setProcessingMode("bring_to_life")}
+            />
+            <span className="font-semibold">Bring the chapter to life</span>
+            <p className="mt-1 text-xs text-white/60">
+              AI vision links characters to actors, emotions, and FX cues.
+            </p>
+          </label>
+          <label
+            className={`rounded-2xl border px-4 py-3 transition ${
+              processingMode === "narrate"
+                ? "border-sky-400/80 bg-white/10"
+                : "border-white/10 bg-black/20"
+            }`}
+          >
+            <input
+              type="radio"
+              name="processing-mode"
+              value="narrate"
+              className="mr-3 accent-sky-400"
+              checked={processingMode === "narrate"}
+              onChange={() => setProcessingMode("narrate")}
+            />
+            <span className="font-semibold">Just narrate it</span>
+            <p className="mt-1 text-xs text-white/60">
+              Use the narrator voice for every line, no character casting.
+            </p>
+          </label>
+        </div>
+      </div>
 
       <div className="space-y-3">
         <div className="flex items-center justify-between text-xs text-white/60">

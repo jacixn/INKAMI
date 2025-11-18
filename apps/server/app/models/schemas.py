@@ -5,6 +5,7 @@ from typing import Literal, Sequence
 from pydantic import BaseModel, Field
 
 BubbleType = Literal["dialogue", "narration", "thought", "sfx"]
+ProcessingMode = Literal["bring_to_life", "narrate"]
 
 
 class WordTime(BaseModel):
@@ -41,6 +42,7 @@ class ChapterPayload(BaseModel):
     status: Literal["processing", "ready", "failed"]
     progress: int = 0
     pages: list[PagePayload] = Field(default_factory=list)
+    processing_mode: ProcessingMode = "bring_to_life"
 
 
 class JobStatus(BaseModel):

@@ -4,7 +4,13 @@ from pathlib import Path
 import re
 from typing import Iterable, TypedDict
 
-from app.models.schemas import BubbleItem, ChapterPayload, PagePayload, WordTime
+from app.models.schemas import (
+    BubbleItem,
+    ChapterPayload,
+    PagePayload,
+    ProcessingMode,
+    WordTime,
+)
 from app.services.pipeline import chapter_store
 from app.services.speaker import speaker_linker
 from app.services.tts import tts_service
@@ -19,12 +25,14 @@ class ChapterFile(TypedDict):
     path: str
 
 
-def enqueue_chapter_job(chapter_id: str, files: Iterable[ChapterFile]) -> str:
+def enqueue_chapter_job(
+    chapter_id: str, files: Iterable[ChapterFile], processing_mode: ProcessingMode = "bring_to_life"
+) -> str:
     job = chapter_store.create_job()
     chapter_store.update_job(
         job.job_id, status="processing", chapter_id=chapter_id, progress=5
     )
-    process_chapter(chapter_id, list(files), job.job_id)
+    process_chapter(chapter_id, list(files), job.job_id, processing_mode)
     chapter_store.update_job(job.job_id, status="ready", progress=100)
     return job.job_id
 
@@ -52,7 +60,12 @@ def _bubble_kind_from_analysis(analysis: CharacterAnalysis) -> str:
     return "dialogue"
 
 
-def process_chapter(chapter_id: str, files: list[ChapterFile], job_id: str | None = None) -> None:
+def process_chapter(
+    chapter_id: str,
+    files: list[ChapterFile],
+    job_id: str | None = None,
+    processing_mode: ProcessingMode = "bring_to_life",
+) -> None:
     if not files:
         return
 
@@ -89,18 +102,27 @@ def process_chapter(chapter_id: str, files: list[ChapterFile], job_id: str | Non
         for bubble_idx, (bubble_box, text, analysis) in enumerate(vision_bubbles):
             normalized_text = _normalize_text(text)
             bubble_type = _bubble_kind_from_analysis(analysis)
-            speaker_label = (
-                analysis.character_type.replace("_", " ").title()
-                if analysis.character_type
-                else None
-            )
+            if processing_mode == "narrate":
+                assigned_voice = "voice_narrator"
+                stability = 0.7
+                similarity_boost = 0.85
+                speaker_label = "Narrator"
+            else:
+                assigned_voice = analysis.voice_suggestion
+                stability = analysis.stability
+                similarity_boost = analysis.similarity_boost
+                speaker_label = (
+                    analysis.character_type.replace("_", " ").title()
+                    if analysis.character_type
+                    else None
+                )
             
             # Generate TTS with emotion parameters
             tts_result = tts_service.synthesize(
                 normalized_text,
-                analysis.voice_suggestion,
-                stability=analysis.stability,
-                similarity_boost=analysis.similarity_boost,
+                assigned_voice,
+                stability=stability,
+                similarity_boost=similarity_boost,
             )
             
             items.append(
@@ -111,7 +133,7 @@ def process_chapter(chapter_id: str, files: list[ChapterFile], job_id: str | Non
                     type=bubble_type,
                     speaker_id=f"{chapter_id[:6]}_speaker_{index}_{bubble_idx}",
                     speaker_name=speaker_label,
-                    voice_id=analysis.voice_suggestion,
+                    voice_id=assigned_voice,
                     text=normalized_text,
                     audio_url=tts_result.audio_url,
                     word_times=[WordTime(**word.model_dump()) for word in tts_result.word_times],
@@ -140,6 +162,7 @@ def process_chapter(chapter_id: str, files: list[ChapterFile], job_id: str | Non
         status="ready",
         progress=100,
         pages=pages,
+        processing_mode=processing_mode,
     )
     chapter_store.save_chapter(chapter)
 
