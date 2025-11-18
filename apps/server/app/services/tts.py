@@ -30,15 +30,21 @@ class TTSService:
     ELEVEN_MODEL = "eleven_multilingual_v2"
 
     def synthesize(self, text: str, voice_id: str, stability: float = 0.5, similarity_boost: float = 0.75) -> TTSResult:
+        print(f"🔊 TTS Request: text='{text[:50]}...' voice={voice_id} stability={stability}")
         provider_chain = [
             provider.strip()
             for provider in settings.tts_provider_priority.split(",")
             if provider.strip()
         ]
+        print(f"📋 Provider chain: {provider_chain}, ElevenLabs key set: {bool(settings.elevenlabs_api_key)}")
+        
         for provider in provider_chain:
             if provider == "elevenlabs" and settings.elevenlabs_api_key:
                 try:
-                    return self._synthesize_elevenlabs(text, voice_id, stability, similarity_boost)
+                    print(f"🎤 Attempting ElevenLabs synthesis...")
+                    result = self._synthesize_elevenlabs(text, voice_id, stability, similarity_boost)
+                    print(f"✅ ElevenLabs SUCCESS! Audio URL: {result.audio_url[:100]}")
+                    return result
                 except Exception as e:
                     print(f"❌ ElevenLabs TTS failed: {type(e).__name__}: {str(e)}")
                     continue
