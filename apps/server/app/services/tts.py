@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import random
 from dataclasses import dataclass
 from typing import List
@@ -106,6 +107,7 @@ class TTSService:
         stability: float = 0.5,
         similarity_boost: float = 0.75,
         style: float | None = None,
+        tone_hint: str | None = None,
     ) -> TTSResult:
         print(
             f"🔊 TTS Request: text='{text[:50]}...' voice={voice_id} "
@@ -123,7 +125,7 @@ class TTSService:
                 try:
                     print(f"🎤 Attempting ElevenLabs synthesis...")
                     result = self._synthesize_elevenlabs(
-                        text, voice_id, stability, similarity_boost, style
+                        text, voice_id, stability, similarity_boost, style, tone_hint
                     )
                     print(f"✅ ElevenLabs SUCCESS! Audio URL: {result.audio_url[:100]}")
                     return result
@@ -133,7 +135,7 @@ class TTSService:
             if provider == "openai" and settings.openai_api_key:
                 try:
                     print("🎤 Attempting OpenAI TTS synthesis...")
-                    result = self._synthesize_openai(text, voice_id)
+                    result = self._synthesize_openai(text, voice_id, tone_hint=tone_hint)
                     print(f"✅ OpenAI TTS SUCCESS! Audio URL: {result.audio_url[:100]}")
                     return result
                 except Exception as e:
@@ -144,7 +146,7 @@ class TTSService:
                 f"⚠️ Provider chain exhausted; forcing OpenAI TTS for: {text[:50]}..."
             )
             try:
-                result = self._synthesize_openai(text, voice_id)
+                result = self._synthesize_openai(text, voice_id, tone_hint=tone_hint)
                 print(
                     f"✅ OpenAI forced fallback SUCCESS! Audio URL: {result.audio_url[:100]}"
                 )
@@ -174,6 +176,7 @@ class TTSService:
         stability: float = 0.5,
         similarity_boost: float = 0.75,
         style: float | None = None,
+        tone_hint: str | None = None,
     ) -> TTSResult:
         resolved_voice = self.ELEVEN_VOICE_MAP.get(voice_id, self.ELEVEN_VOICE_MAP["voice_narrator_f"])
         url = f"https://api.elevenlabs.io/v1/text-to-speech/{resolved_voice}"
@@ -217,21 +220,39 @@ class TTSService:
         audio_url = storage_client.put_bytes(key, audio_bytes, "audio/mpeg")
         return TTSResult(audio_url=audio_url, word_times=self._approximate_word_times(text))
 
-    def _synthesize_openai(self, text: str, voice_id: str) -> TTSResult:
+    def _synthesize_openai(
+        self, text: str, voice_id: str, tone_hint: str | None = None
+    ) -> TTSResult:
         api_key = (settings.openai_api_key or "").strip()
         if not api_key:
             raise RuntimeError("OpenAI API key missing")
         voice = self.OPENAI_VOICE_MAP.get(voice_id, "alloy")
-        url = "https://api.openai.com/v1/audio/speech"
+        url = "https://api.openai.com/v1/responses"
         headers = {
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
         }
+        system_instruction = (
+            "You are a professional voice actor. Read exactly the user script "
+            "and respect punctuation—questions should rise, commas create pauses, "
+            "ellipses trail off naturally."
+        )
+        if tone_hint:
+            system_instruction += f" For this specific line: {tone_hint.strip()}"
         payload = {
             "model": self.OPENAI_TTS_MODEL,
-            "voice": voice,
-            "input": text,
-            "format": "mp3",
+            "modalities": ["audio"],
+            "audio": {"voice": voice, "format": "mp3"},
+            "input": [
+                {
+                    "role": "system",
+                    "content": [{"type": "text", "text": system_instruction}],
+                },
+                {
+                    "role": "user",
+                    "content": [{"type": "input_text", "text": text}],
+                },
+            ],
         }
         last_error: Exception | None = None
         audio_bytes: bytes | None = None
@@ -258,16 +279,30 @@ class TTSService:
                 last_error = exc
                 break
 
-            audio_bytes = response.content
+            data = response.json()
+            audio_bytes = self._extract_openai_audio(data)
             break
         else:
             if last_error:
                 raise last_error
             raise RuntimeError("OpenAI TTS gave no response")
 
+        if audio_bytes is None:
+            raise RuntimeError("OpenAI response missing audio data")
         key = f"tts_openai/{voice_id}/{uuid4().hex}.mp3"
         audio_url = storage_client.put_bytes(key, audio_bytes, "audio/mpeg")
         return TTSResult(audio_url=audio_url, word_times=self._approximate_word_times(text))
+
+    def _extract_openai_audio(self, payload: dict) -> bytes | None:
+        outputs = payload.get("output") or []
+        for message in outputs:
+            for item in message.get("content") or []:
+                if item.get("type") == "audio":
+                    audio_info = item.get("audio") or {}
+                    data = audio_info.get("data")
+                    if data:
+                        return base64.b64decode(data)
+        return None
 
     def _fallback_tts(self, text: str, voice_id: str) -> TTSResult:
         # Return an empty audio URL so the frontend falls back to Web Speech API with the actual text

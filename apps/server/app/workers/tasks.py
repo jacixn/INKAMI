@@ -51,6 +51,51 @@ def _strip_sfx_prefix(text: str) -> str:
     return re.sub(r"^(?:sfx|fx)\s*[:\-]\s*", "", text, flags=re.IGNORECASE).strip()
 
 
+def _build_tone_hint(text: str, analysis: CharacterAnalysis) -> str | None:
+    hints: list[str] = []
+    trimmed = text.strip()
+    lowered = trimmed.lower()
+
+    if trimmed.endswith("?"):
+        hints.append("Deliver it as a genuine question with a gentle rise at the end.")
+    elif trimmed.endswith("!"):
+        hints.append("Deliver it as a forceful exclamation with extra emphasis.")
+    elif trimmed.endswith("..."):
+        hints.append("Let the ending trail off softly, as if unsure.")
+
+    if "," in trimmed:
+        hints.append("Add a brief natural pause at each comma.")
+    if "…" in trimmed:
+        hints.append("Let the ellipsis trail off softly.")
+
+    tone = (analysis.tone or "").lower()
+    tone_map = {
+        "questioning": "Sound curious and slightly rising toward the end.",
+        "dramatic": "Lean into a dramatic delivery with controlled pacing.",
+        "serious": "Keep the delivery measured and grounded.",
+        "playful": "Add a light, playful lilt.",
+        "neutral": "",
+    }
+    tone_hint = tone_map.get(tone)
+    if tone_hint:
+        hints.append(tone_hint)
+
+    emotion = (analysis.emotion or "").lower()
+    emotion_map = {
+        "angry": "Add intensity as if angry.",
+        "excited": "Sound excited and energetic.",
+        "sad": "Soften the tone, as if saddened.",
+        "scared": "Let a hint of fear or urgency come through.",
+    }
+    emotion_hint = emotion_map.get(emotion)
+    if emotion_hint:
+        hints.append(emotion_hint)
+
+    if not hints:
+        return None
+    return " ".join(hints)
+
+
 def _bubble_kind_from_analysis(analysis: CharacterAnalysis) -> str:
     descriptor = (analysis.character_type or "").lower()
     if any(keyword in descriptor for keyword in ("system", "ui", "computer", "panel")):
@@ -161,12 +206,14 @@ def process_chapter(
                 tts_result = TTSResult(audio_url="", word_times=[])
             else:
                 # Generate TTS with emotion parameters
+                tone_hint = _build_tone_hint(normalized_text, analysis)
                 tts_result = tts_service.synthesize(
                     normalized_text,
                     assigned_voice,
                     stability=stability,
                     similarity_boost=similarity_boost,
                     style=style,
+                    tone_hint=tone_hint,
                 )
             
             items.append(
