@@ -6,6 +6,7 @@ from typing import List
 from uuid import uuid4
 
 import requests
+import time
 
 from app.core.config import settings
 from app.core.storage import storage_client
@@ -232,17 +233,37 @@ class TTSService:
             "input": text,
             "format": "mp3",
         }
-        response = requests.post(url, headers=headers, json=payload, timeout=60)
-        try:
-            response.raise_for_status()
-        except requests.HTTPError as exc:
-            body = response.text if response is not None else ""
-            print(
-                f"❌ OpenAI HTTPError "
-                f"{response.status_code if response else '??'}: {body[:500]}"
-            )
-            raise exc
-        audio_bytes = response.content
+        last_error: Exception | None = None
+        for attempt in range(5):
+            response = requests.post(url, headers=headers, json=payload, timeout=60)
+            if response.status_code == 429:
+                wait_time = min(2.0, 0.4 * (attempt + 1))
+                body = response.text if response is not None else ""
+                print(
+                    f"⚠️ OpenAI TTS rate limited (attempt {attempt + 1}/5). "
+                    f"Waiting {wait_time:.2f}s. Response: {body[:160]}"
+                )
+                last_error = requests.HTTPError(body, response=response)
+                time.sleep(wait_time)
+                continue
+            try:
+                response.raise_for_status()
+            except requests.HTTPError as exc:
+                body = response.text if response is not None else ""
+                print(
+                    f"❌ OpenAI HTTPError "
+                    f"{response.status_code if response else '??'}: {body[:500]}"
+                )
+                last_error = exc
+                break
+
+            audio_bytes = response.content
+            break
+        else:
+            if last_error:
+                raise last_error
+            raise RuntimeError("OpenAI TTS gave no response")
+
         key = f"tts_openai/{voice_id}/{uuid4().hex}.mp3"
         audio_url = storage_client.put_bytes(key, audio_bytes, "audio/mpeg")
         return TTSResult(audio_url=audio_url, word_times=self._approximate_word_times(text))
