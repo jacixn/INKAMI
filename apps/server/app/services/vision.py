@@ -358,6 +358,7 @@ class VisionService:
             line = line.strip("-•*> ")
             line = re.sub(r"^\d+[\)\.:-]\s*", "", line)
             line = re.sub(r"(?i)^(bubble|panel|text|speech)\s*\d*\s*[:\-]\s*", "", line).strip()
+            line = self._strip_metadata_from_line(line)
             cleaned_lines.append(line)
         
         bubbles: list[str] = []
@@ -386,6 +387,29 @@ class VisionService:
         if not bubbles and content:
             bubbles = [content.strip()]
         return [text for text in bubbles if len(text) > 1]
+
+    def _strip_metadata_from_line(self, line: str) -> str:
+        if not line:
+            return ""
+        
+        text_match = re.search(r"(?i)text\s*[:=]\s*(.+)", line)
+        if text_match:
+            candidate = text_match.group(1).strip()
+            candidate = candidate.strip(" \"“”'")
+            return candidate
+        
+        meta_patterns = [
+            r"(?i)speaker(?:_gender|\s+gender)?\s*[:=]\s*['\"A-Za-z\s]+",
+            r"(?i)speaker(?:_age|\s+age)?\s*[:=]\s*['\"A-Za-z\s]+",
+            r"(?i)bubble(?:_type|\s+type)?\s*[:=]\s*['\"A-Za-z\s]+",
+            r"(?i)emotion\s*[:=]\s*['\"A-Za-z\s]+",
+            r"(?i)tone\s*[:=]\s*['\"A-Za-z\s]+",
+        ]
+        for pattern in meta_patterns:
+            line = re.sub(pattern, "", line)
+        
+        line = re.sub(r"\s{2,}", " ", line)
+        return line.strip(" ,;:-\"“”'")
 
     def _approximate_bubble_boxes(
         self, count: int, width: int, height: int
