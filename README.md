@@ -47,7 +47,7 @@ See `docs/pipeline.md` and `docs/api-contract.md` for deeper details.
 
 1. Create a GitHub repo under your account (e.g. `jacixn/inkami`) and push this workspace.
 2. In the repo settings → Pages, choose “GitHub Actions” as the source.
-3. Add a repository secret named `PUBLIC_API_URL` pointing to your deployed FastAPI backend (Render/Fly/etc). Until you have a backend, the live upload view will only show the demo timeline.
+3. Add a repository secret named `PUBLIC_API_URL` pointing to your deployed FastAPI backend (Render/Fly/etc). Without a backend, the reader and status views will stay in their placeholder states because no real chapters exist to stream.
 4. The included workflow `.github/workflows/deploy-web.yml` runs on every push to `main`, builds `apps/web` with `next export`, and deploys the static files to Pages.
 5. Your site will be available at `https://<username>.github.io/<repo>/` (or `https://<username>.github.io` if the repo itself is `<username>.github.io`).
 

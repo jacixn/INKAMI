@@ -4,12 +4,10 @@ import { Suspense, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
 import ProcessingStatus from "@/components/ProcessingStatus";
 
-const FALLBACK_CHAPTER_ID = "demo";
-
 function getChapterId(value?: string | null): string {
-  if (!value) return FALLBACK_CHAPTER_ID;
+  if (!value) return "";
   const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : FALLBACK_CHAPTER_ID;
+  return trimmed.length > 0 ? trimmed : "";
 }
 
 function ChapterStatusContent() {
@@ -31,7 +29,7 @@ export default function ChapterStatusPage() {
     <Suspense
       fallback={
         <div className="space-y-6">
-          <ProcessingStatus chapterId={FALLBACK_CHAPTER_ID} />
+          <ProcessingStatus chapterId="" />
         </div>
       }
     >

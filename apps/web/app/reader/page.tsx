@@ -6,12 +6,10 @@ import VoiceInspector from "@/components/VoiceInspector";
 import { usePlaybackController } from "@/hooks/usePlaybackController";
 import ImmersiveReader from "@/components/ImmersiveReader";
 
-const FALLBACK_CHAPTER_ID = "demo";
-
 function getChapterId(value?: string | null): string {
-  if (!value) return FALLBACK_CHAPTER_ID;
+  if (!value) return "";
   const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : FALLBACK_CHAPTER_ID;
+  return trimmed.length > 0 ? trimmed : "";
 }
 
 function ReaderPageContent() {
@@ -23,7 +21,19 @@ function ReaderPageContent() {
 
   const controller = usePlaybackController(chapterId);
 
-  return (
+  const missingChapterId = chapterId.length === 0;
+
+  return missingChapterId ? (
+    <div className="space-y-6">
+      <section className="card space-y-3 text-center text-sm text-ink-100">
+        <p className="text-base font-semibold text-white">No chapter selected</p>
+        <p>
+          Upload a chapter or open one from the Status page to preview voices in the
+          reader.
+        </p>
+      </section>
+    </div>
+  ) : (
     <div className="space-y-6">
       <ImmersiveReader controller={controller} />
       <VoiceInspector controller={controller} />

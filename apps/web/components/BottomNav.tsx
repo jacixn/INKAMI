@@ -23,7 +23,7 @@ interface NavItem {
 const navItems: NavItem[] = [
   {
     label: "Listen",
-    href: { pathname: "/reader", query: { id: "demo" } },
+    href: "/reader",
     icon: (active: boolean) => (
       <svg
         width="20"
@@ -66,7 +66,7 @@ const navItems: NavItem[] = [
   },
   {
     label: "Status",
-    href: { pathname: "/chapters", query: { id: "demo" } },
+    href: "/chapters",
     icon: (active: boolean) => (
       <svg
         width="20"

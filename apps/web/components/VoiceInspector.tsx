@@ -59,7 +59,7 @@ export default function VoiceInspector({ controller }: Props) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ voice_id: newVoice })
       });
-      if (controller.chapterId && controller.chapterId !== "demo") {
+      if (controller.chapterId) {
         await mutate(`/api/chapters/${controller.chapterId}`);
       }
       setMessage("Voice updated.");

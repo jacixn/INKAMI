@@ -41,10 +41,10 @@ export default function Home() {
               Upload a chapter
             </Link>
             <Link
-              href="/reader?id=demo"
+              href="/chapters"
               className="rounded-full border border-white/30 px-6 py-3 text-sm font-semibold text-white/80"
             >
-              Watch live demo
+              View chapter status
             </Link>
           </div>
           <div className="flex flex-wrap gap-3 text-xs uppercase tracking-[0.3em] text-white/50">

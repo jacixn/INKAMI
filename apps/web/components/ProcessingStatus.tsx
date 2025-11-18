@@ -7,10 +7,27 @@ import { cn } from "@/lib/utils";
 import LoadingOrbit from "./LoadingOrbit";
 
 interface ProcessingStatusProps {
-  chapterId: string;
+  chapterId?: string;
 }
 
 export default function ProcessingStatus({ chapterId }: ProcessingStatusProps) {
+  if (!chapterId) {
+    return (
+      <section className="card space-y-4">
+        <h1 className="text-2xl font-semibold text-white">No chapter selected</h1>
+        <p className="text-sm text-ink-100">
+          Upload a chapter or pick one from your recent uploads to monitor progress.
+        </p>
+        <Link
+          href="/upload"
+          className="inline-flex rounded-full bg-white px-4 py-2 text-sm font-semibold text-black"
+        >
+          Upload a chapter
+        </Link>
+      </section>
+    );
+  }
+
   const { data, error, isLoading } = useSWR(
     chapterId ? `/api/chapters/${chapterId}` : null,
     fetcher,

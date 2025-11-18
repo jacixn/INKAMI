@@ -6,125 +6,6 @@ import { fetcher } from "@/lib/api";
 import type { BubbleItem, ChapterPayload, PlaybackController } from "@/lib/types";
 
 const NEXT_BUBBLE_DELAY_MS = 500;
-const basePath = (process.env.NEXT_PUBLIC_BASE_PATH ?? "").replace(/\/$/, "");
-const withBasePath = (assetPath: string) =>
-  `${basePath}${assetPath}` || assetPath;
-
-const demoChapter: ChapterPayload = {
-  chapter_id: "demo",
-  title: "Demo Chapter",
-  status: "ready",
-  progress: 100,
-  processing_mode: "bring_to_life",
-  pages: [
-    {
-      page_index: 0,
-      image_url: withBasePath("/demo-page.webp"),
-      items: [
-        {
-          bubble_id: "demo-bubble-1",
-          panel_box: [60, 80, 1020, 1820],
-          bubble_box: [140, 260, 640, 560],
-          type: "dialogue",
-          speaker_id: "heroine",
-          speaker_name: "Young Woman",
-          voice_id: "voice_young_f",
-          text: "We turned this entire chapter into audio in under one minute.",
-          audio_url: "",
-          word_times: [
-            { word: "We", start: 0, end: 0.35 },
-            { word: "turned", start: 0.35, end: 0.75 },
-            { word: "this", start: 0.75, end: 1.0 },
-            { word: "entire", start: 1.0, end: 1.4 },
-            { word: "chapter", start: 1.4, end: 1.9 },
-            { word: "into", start: 1.9, end: 2.2 },
-            { word: "audio", start: 2.2, end: 2.6 },
-            { word: "in", start: 2.6, end: 2.7 },
-            { word: "under", start: 2.7, end: 3.0 },
-            { word: "one", start: 3.0, end: 3.2 },
-            { word: "minute.", start: 3.2, end: 3.7 }
-          ]
-        },
-        {
-          bubble_id: "demo-bubble-2",
-          panel_box: [60, 80, 1020, 1820],
-          bubble_box: [420, 780, 920, 1040],
-          type: "narration",
-          speaker_id: "narrator",
-          speaker_name: "Narrator",
-          voice_id: "voice_narrator",
-          text: "Inkami understands panels, characters, and emotion to pick the right voice.",
-          audio_url: "",
-          word_times: [
-            { word: "Inkami", start: 0, end: 0.6 },
-            { word: "understands", start: 0.6, end: 1.2 },
-            { word: "panels,", start: 1.2, end: 1.5 },
-            { word: "characters,", start: 1.5, end: 2.0 },
-            { word: "and", start: 2.0, end: 2.2 },
-            { word: "emotion", start: 2.2, end: 2.7 },
-            { word: "to", start: 2.7, end: 2.9 },
-            { word: "pick", start: 2.9, end: 3.1 },
-            { word: "the", start: 3.1, end: 3.25 },
-            { word: "right", start: 3.25, end: 3.45 },
-            { word: "voice.", start: 3.45, end: 3.9 }
-          ]
-        }
-      ],
-      reading_order: ["demo-bubble-1", "demo-bubble-2"]
-    },
-    {
-      page_index: 1,
-      image_url:
-        "https://images.unsplash.com/photo-1472457897821-70d3819a0e24?auto=format&fit=crop&w=900&q=80",
-      items: [
-        {
-          bubble_id: "demo-bubble-3",
-          panel_box: [40, 120, 1030, 1850],
-          bubble_box: [160, 360, 620, 580],
-          type: "dialogue",
-          speaker_id: "rival",
-          speaker_name: "Young Man",
-          voice_id: "voice_young_m",
-          text: "Tap any bubble and I will replay it instantly.",
-          audio_url: "",
-          word_times: [
-            { word: "Tap", start: 0, end: 0.35 },
-            { word: "any", start: 0.35, end: 0.55 },
-            { word: "bubble", start: 0.55, end: 0.9 },
-            { word: "and", start: 0.9, end: 1.1 },
-            { word: "I", start: 1.1, end: 1.2 },
-            { word: "will", start: 1.2, end: 1.35 },
-            { word: "replay", start: 1.35, end: 1.7 },
-            { word: "it", start: 1.7, end: 1.85 },
-            { word: "instantly.", start: 1.85, end: 2.4 }
-          ]
-        },
-        {
-          bubble_id: "demo-bubble-4",
-          panel_box: [40, 120, 1030, 1850],
-          bubble_box: [440, 880, 900, 1140],
-          type: "narration",
-          speaker_id: "narrator",
-          speaker_name: "Narrator",
-          voice_id: "voice_narrator",
-          text: "Karaoke-style highlights stay synced with the audio stream.",
-          audio_url: "",
-          word_times: [
-            { word: "Karaoke-style", start: 0, end: 0.8 },
-            { word: "highlights", start: 0.8, end: 1.3 },
-            { word: "stay", start: 1.3, end: 1.55 },
-            { word: "synced", start: 1.55, end: 1.9 },
-            { word: "with", start: 1.9, end: 2.05 },
-            { word: "the", start: 2.05, end: 2.15 },
-            { word: "audio", start: 2.15, end: 2.45 },
-            { word: "stream.", start: 2.45, end: 2.9 }
-          ]
-        }
-      ],
-      reading_order: ["demo-bubble-3", "demo-bubble-4"]
-    }
-  ]
-};
 
 interface ControllerState extends PlaybackController {
   loading: boolean;
@@ -132,15 +13,13 @@ interface ControllerState extends PlaybackController {
 }
 
 export function usePlaybackController(chapterId: string): ControllerState {
-  const isDemo = chapterId === "demo";
-  const swrKey = !isDemo && chapterId ? `/api/chapters/${chapterId}` : null;
+  const swrKey = chapterId ? `/api/chapters/${chapterId}` : null;
   const { data, isLoading, error } = useSWR<ChapterPayload>(swrKey, fetcher, {
     refreshInterval: 5000
   });
 
-  const chapterData = isDemo ? demoChapter : data;
-  const loading = isDemo ? false : isLoading;
-  const networkError = !isDemo && error ? error.message : null;
+  const loading = chapterId ? isLoading : false;
+  const networkError = error ? error.message : null;
 
   const [currentPageIndex, setCurrentPageIndex] = useState(0);
   const [currentBubbleId, setCurrentBubbleId] = useState<string>();
@@ -151,7 +30,7 @@ export function usePlaybackController(chapterId: string): ControllerState {
   const speechRef = useRef<SpeechSynthesisUtterance | null>(null);
   const nextBubbleRef = useRef<() => void>(() => {});
 
-  const pages = chapterData?.pages ?? [];
+  const pages = data?.pages ?? [];
 
   useEffect(() => {
     if (!pages.length) return;
@@ -379,7 +258,7 @@ export function usePlaybackController(chapterId: string): ControllerState {
     setSpeed,
     setBubble,
     loading,
-    chapter: chapterData
+    chapter: data
   };
 }
 
