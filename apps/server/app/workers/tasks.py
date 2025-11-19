@@ -26,13 +26,16 @@ class ChapterFile(TypedDict):
 
 
 def enqueue_chapter_job(
-    chapter_id: str, files: Iterable[ChapterFile], processing_mode: ProcessingMode = "bring_to_life"
+    chapter_id: str,
+    files: Iterable[ChapterFile],
+    processing_mode: ProcessingMode = "bring_to_life",
+    narrator_gender: str = "female",
 ) -> str:
     job = chapter_store.create_job()
     chapter_store.update_job(
         job.job_id, status="processing", chapter_id=chapter_id, progress=5
     )
-    process_chapter(chapter_id, list(files), job.job_id, processing_mode)
+    process_chapter(chapter_id, list(files), job.job_id, processing_mode, narrator_gender)
     chapter_store.update_job(job.job_id, status="ready", progress=100)
     return job.job_id
 
@@ -179,6 +182,7 @@ def process_chapter(
     files: list[ChapterFile],
     job_id: str | None = None,
     processing_mode: ProcessingMode = "bring_to_life",
+    narrator_gender: str = "female",
 ) -> None:
     if not files:
         return
@@ -237,7 +241,9 @@ def process_chapter(
                 and bubble_type not in {"sfx", "narration"}
             )
             if processing_mode == "narrate":
-                assigned_voice = "voice_narrator_f"
+                assigned_voice = (
+                    "voice_narrator_m" if narrator_gender == "male" else "voice_narrator_f"
+                )
                 stability = 0.7
                 similarity_boost = 0.85
                 speaker_label = "Narrator"
