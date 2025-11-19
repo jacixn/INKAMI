@@ -39,7 +39,7 @@ export default function UploadWizard() {
   const preflight = files.length ? Math.min(35 + files.length * 4, 90) : 15;
   const progress = isUploading ? Math.min(preflight + 10, 96) : preflight;
 
-  function handleFiles(list: FileList | null) {
+  function handleFiles(list: FileList | null, resetInput = false) {
     if (!list?.length) {
       setFiles([]);
       return;
@@ -47,6 +47,9 @@ export default function UploadWizard() {
     setFiles(Array.from(list));
     setError(null);
     setIsHovering(false);
+    if (resetInput && inputRef.current) {
+      inputRef.current.value = "";
+    }
   }
 
   async function handleUpload() {
@@ -130,7 +133,7 @@ export default function UploadWizard() {
           accept=".zip,.pdf,image/*"
           multiple
           className="sr-only"
-          onChange={(event) => handleFiles(event.target.files)}
+          onChange={(event) => handleFiles(event.target.files, true)}
         />
       </motion.div>
 
