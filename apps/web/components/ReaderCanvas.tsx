@@ -5,7 +5,7 @@ import type { PlaybackController } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 interface Props {
-  controller: PlaybackController & { loading: boolean };
+  controller: PlaybackController;
   variant?: "default" | "immersive";
   isFullscreen?: boolean;
 }
@@ -15,6 +15,7 @@ export default function ReaderCanvas({
   variant = "default",
   isFullscreen = false
 }: Props) {
+  const isLoading = controller.loading ?? false;
   const page = controller.pages[controller.currentPageIndex];
   const immersive = variant === "immersive";
 
@@ -26,7 +27,7 @@ export default function ReaderCanvas({
           immersive ? "rounded-[32px] border border-white/10 bg-black/30" : "card"
         )}
       >
-        {controller.loading ? "Loading chapter..." : "No pages loaded yet."}
+        {isLoading ? "Loading chapter..." : "No pages loaded yet."}
       </section>
     );
   }
