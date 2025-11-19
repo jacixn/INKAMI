@@ -145,11 +145,13 @@ def _build_tts_delivery_text(text: str, analysis: CharacterAnalysis) -> str:
     emphasized = trimmed
 
     if trimmed.endswith("?"):
+        # Double question mark sometimes helps OpenAI raise pitch
         emphasized = trimmed + "?"
     elif trimmed.endswith(("!", "!!")):
         emphasized = trimmed + "!"
     elif trimmed.endswith(("...", "…")):
-        emphasized = trimmed + " ..."
+        # Ensure it's a single ellipsis character to avoid "dot dot dot"
+        emphasized = trimmed.rstrip(".…") + "…"
     else:
         tone = (analysis.tone or "").lower()
         emotion = (analysis.emotion or "").lower()
@@ -159,7 +161,7 @@ def _build_tts_delivery_text(text: str, analysis: CharacterAnalysis) -> str:
             if not trimmed.endswith(("!", "!!")):
                 emphasized = trimmed + "!"
         elif tone in {"sad", "hesitant"} and not trimmed.endswith(("...", "…")):
-            emphasized = trimmed + "..."
+            emphasized = trimmed + "…"
 
     return emphasized
 
