@@ -233,6 +233,15 @@ def process_chapter(
             if processing_mode == "narrate" and bubble_type != "sfx":
                 if _looks_like_sfx_text(normalized_text):
                     bubble_type = "sfx"
+            
+            # FILTER OUT SFX AND HALLUCINATIONS
+            if bubble_type == "sfx":
+                continue  # Completely skip SFX
+            if normalized_text.lower() in {"jason", "json"}:
+                continue # Skip specific hallucination
+            if len(normalized_text) < 2 and not normalized_text.isalnum():
+                continue # Skip single punctuation noise
+                
             character_key = (analysis.character_type or "").strip().lower()
             reuse_allowed = (
                 processing_mode != "narrate"
@@ -276,20 +285,19 @@ def process_chapter(
                 )
             
             if bubble_type == "sfx":
-                normalized_text = _strip_sfx_prefix(normalized_text)
-                tts_result = TTSResult(audio_url="", word_times=[])
-            else:
-                # Generate TTS with emotion parameters
-                tone_hint = _build_tone_hint(normalized_text, analysis)
-                delivery_text = _build_tts_delivery_text(normalized_text, analysis)
-                tts_result = tts_service.synthesize(
-                    delivery_text,
-                    assigned_voice,
-                    stability=stability,
-                    similarity_boost=similarity_boost,
-                    style=style,
-                    tone_hint=tone_hint,
-                )
+                continue # Should be caught above, but safe keeping
+            
+            # Generate TTS with emotion parameters
+            tone_hint = _build_tone_hint(normalized_text, analysis)
+            delivery_text = _build_tts_delivery_text(normalized_text, analysis)
+            tts_result = tts_service.synthesize(
+                delivery_text,
+                assigned_voice,
+                stability=stability,
+                similarity_boost=similarity_boost,
+                style=style,
+                tone_hint=tone_hint,
+            )
             
             items.append(
                 BubbleItem(
