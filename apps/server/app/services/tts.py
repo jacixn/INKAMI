@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import random
+import time
 from dataclasses import dataclass
 from typing import List
 from uuid import uuid4
 
 import requests
-import time
 
 from app.core.config import settings
 from app.core.storage import storage_client
@@ -31,12 +31,8 @@ class TTSService:
         "voice_young_m": "yoZ06aMxZJJ28mfd3POQ",  # Adam - realistic heroic lead
         "voice_adult_m": "TxGEqnHWrfWFTfGW9XjX",  # Josh - mature deep voice
         
-        # Narrators
-        "voice_narrator_f": "EXAVITQu4vr4xnSDxMaL",  # Sarah - cinematic female narrator
-        "voice_narrator_m": "VR6AewLTigWG4xSOukaG",  # Tom - rich male narrator
-
-        # Backwards compatibility alias (legacy narrator id)
-        "voice_narrator": "EXAVITQu4vr4xnSDxMaL",
+        # Special voices
+        "voice_narrator": "EXAVITQu4vr4xnSDxMaL",  # Sarah - clear narrator
         "voice_system": "CwhRBWXzGAHq8TQ4Fs17",  # Roger - calm, precise system tone
         "voice_sfx": "N2lVS1w4EtoT3dr4eOWO",  # Callum - punchy FX cues
     }
@@ -48,9 +44,7 @@ class TTSService:
         "voice_child_m": "Young Boy",
         "voice_young_m": "Young Man",
         "voice_adult_m": "Mature Man",
-        "voice_narrator_f": "Narrator • Female",
-        "voice_narrator_m": "Narrator • Male",
-        "voice_narrator": "Narrator • Legacy",
+        "voice_narrator": "Narrator",
         "voice_system": "System Voice",
         "voice_sfx": "FX Voice",
     }
@@ -65,26 +59,12 @@ class TTSService:
         "voice_child_m": "echo",
         "voice_young_m": "alloy",
         "voice_adult_m": "onyx",
-        "voice_narrator_f": "ballad",
-        "voice_narrator_m": "sage",
         "voice_narrator": "ballad",
         "voice_system": "ash",
         "voice_sfx": "coral",
     }
 
     VOICE_SETTINGS_OVERRIDES = {
-        "voice_narrator_f": {
-            "stability": 0.72,
-            "similarity_boost": 0.8,
-            "style": 0.35,
-            "use_speaker_boost": True,
-        },
-        "voice_narrator_m": {
-            "stability": 0.75,
-            "similarity_boost": 0.82,
-            "style": 0.3,
-            "use_speaker_boost": True,
-        },
         "voice_system": {
             "stability": 0.92,
             "similarity_boost": 0.25,
@@ -177,16 +157,13 @@ class TTSService:
         style: float | None = None,
         tone_hint: str | None = None,
     ) -> TTSResult:
-        resolved_voice = self.ELEVEN_VOICE_MAP.get(voice_id, self.ELEVEN_VOICE_MAP["voice_narrator_f"])
+        resolved_voice = self.ELEVEN_VOICE_MAP.get(voice_id, self.ELEVEN_VOICE_MAP["voice_narrator"])
         url = f"https://api.elevenlabs.io/v1/text-to-speech/{resolved_voice}"
-        api_key = (settings.elevenlabs_api_key or "").strip()
         headers = {
-            "xi-api-key": api_key,
+            "xi-api-key": settings.elevenlabs_api_key or "",
             "Accept": "audio/mpeg",
             "Content-Type": "application/json",
         }
-        if not api_key:
-            raise RuntimeError("ElevenLabs API key missing")
         voice_settings = {
             "stability": stability,
             "similarity_boost": similarity_boost,
@@ -205,15 +182,7 @@ class TTSService:
             "voice_settings": voice_settings,
         }
         response = requests.post(url, headers=headers, json=payload, timeout=60)
-        try:
-            response.raise_for_status()
-        except requests.HTTPError as exc:
-            body = response.text if response is not None else ""
-            print(
-                f"❌ ElevenLabs HTTPError "
-                f"{response.status_code if response else '??'}: {body[:500]}"
-            )
-            raise exc
+        response.raise_for_status()
         audio_bytes = response.content
         key = f"tts/{voice_id}/{uuid4().hex}.mp3"
         audio_url = storage_client.put_bytes(key, audio_bytes, "audio/mpeg")
@@ -237,9 +206,9 @@ class TTSService:
             "format": "mp3",
             "input": text,
         }
+        max_attempts = 8
         last_error: Exception | None = None
         audio_bytes: bytes | None = None
-        max_attempts = 8
         for attempt in range(max_attempts):
             response = requests.post(url, headers=headers, json=payload, timeout=60)
             if response.status_code == 429:
