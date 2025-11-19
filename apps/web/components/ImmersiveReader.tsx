@@ -100,18 +100,32 @@ export default function ImmersiveReader({ controller }: ImmersiveReaderProps) {
     const element = fullscreenRef.current;
     if (!element) return;
 
+    // Check if standard API is supported
+    const isSupported = !!(
+      document.fullscreenEnabled || 
+      (document as any).webkitFullscreenEnabled
+    );
+
+    if (!isSupported) {
+      // Force CSS fallback immediately for iOS/unsupported browsers
+      setIsFullscreen((prev) => !prev);
+      setControlsVisible(true);
+      scheduleHideControls();
+      return;
+    }
+
     try {
       if (document.fullscreenElement === element) {
         if (document.exitFullscreen) {
           await document.exitFullscreen();
-        } else {
-           setIsFullscreen(false); // Fallback exit
         }
       } else {
         if (element.requestFullscreen) {
            await element.requestFullscreen();
+        } else if ((element as any).webkitRequestFullscreen) {
+           await (element as any).webkitRequestFullscreen();
         } else {
-           // Fallback enter (iOS Safari)
+           // Fallback if API exists but method is missing (rare)
            setIsFullscreen(true);
            setControlsVisible(true);
            scheduleHideControls();
@@ -119,7 +133,6 @@ export default function ImmersiveReader({ controller }: ImmersiveReaderProps) {
       }
     } catch (error) {
       console.warn("Fullscreen API failed, using CSS fallback", error);
-      // Fallback if API throws (e.g. user denied, unsupported)
       setIsFullscreen((prev) => !prev);
       setControlsVisible(true);
       scheduleHideControls();
