@@ -30,7 +30,7 @@ export default function PlaybackControls({
 
   return (
     <section className={wrapperClass}>
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center justify-center gap-3 sm:justify-start">
         <button
           type="button"
           onClick={controller.prevBubble}
@@ -80,11 +80,12 @@ export default function PlaybackControls({
             type="button"
             onClick={onRestart}
             className={cn(
-              "ml-2 inline-flex items-center gap-2 rounded-full border border-white/20 px-4 py-2 text-sm font-semibold text-white transition hover:border-white/60",
+              "ml-2 inline-flex items-center gap-2 rounded-full border border-white/20 px-3 py-2 text-sm font-semibold text-white transition hover:border-white/60 sm:px-4",
               variant === "overlay" && "bg-white/10 backdrop-blur"
             )}
+            aria-label="Restart"
           >
-            Restart
+            <span className="hidden sm:inline">Restart</span>
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
               <path
                 d="M3.5 6v-3h3M12.5 10v3h-3M3.5 5.5a6 6 0 0 1 9.5-1.8M12.5 10.5a6 6 0 0 1-9.5 1.8"
@@ -101,17 +102,21 @@ export default function PlaybackControls({
             type="button"
             onClick={onToggleFullscreen}
             className={cn(
-              "ml-2 inline-flex items-center gap-2 rounded-full border border-white/20 px-4 py-2 text-sm font-semibold text-white transition hover:border-white/60",
+              "ml-2 inline-flex items-center gap-2 rounded-full border border-white/20 px-3 py-2 text-sm font-semibold text-white transition hover:border-white/60 sm:px-4",
               variant === "overlay" && "bg-white/10 backdrop-blur"
             )}
+            aria-label={isFullscreen ? "Exit full screen" : "Full screen"}
           >
-            {isFullscreen ? "Exit full screen" : "Full screen"}
+            <span className="hidden sm:inline">
+              {isFullscreen ? "Exit full screen" : "Full screen"}
+            </span>
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
               <path
                 d="M5.5 3H3v2.5M10.5 3H13v2.5M5.5 13H3v-2.5M10.5 13H13v-2.5"
                 stroke="currentColor"
                 strokeWidth="1.4"
                 strokeLinecap="round"
+                strokeLinejoin="round"
               />
             </svg>
           </button>
@@ -135,4 +140,3 @@ export default function PlaybackControls({
     </section>
   );
 }
-
