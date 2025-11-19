@@ -48,7 +48,10 @@ export default function UploadWizard() {
     setError(null);
     setIsHovering(false);
     if (resetInput && inputRef.current) {
-      inputRef.current.value = "";
+      // Delay reset to ensure the event loop completes and state is captured
+      setTimeout(() => {
+        if (inputRef.current) inputRef.current.value = "";
+      }, 500);
     }
   }
 
@@ -84,12 +87,12 @@ export default function UploadWizard() {
 
   return (
     <section className="glass-panel flex flex-col gap-6 p-6">
-      <motion.div
-        className={`rounded-3xl border border-dashed p-8 text-center transition ${
+      <motion.label
+        htmlFor={inputId}
+        className={`block cursor-pointer rounded-3xl border border-dashed p-8 text-center transition ${
           isHovering ? "border-white/60 bg-white/10" : "border-white/20 bg-white/5"
         }`}
         whileHover={{ scale: 1.01 }}
-        onClick={() => inputRef.current?.click()}
         onDragEnter={(event) => {
           event.preventDefault();
           setIsHovering(true);
@@ -120,12 +123,11 @@ export default function UploadWizard() {
             </span>
           ))}
         </div>
-        <label
-          htmlFor={inputId}
+        <span
           className="mx-auto mt-6 inline-flex items-center gap-2 rounded-full bg-white px-6 py-3 text-sm font-semibold text-black shadow-lg shadow-purple-500/30"
         >
           Browse files
-        </label>
+        </span>
         <input
           ref={inputRef}
           id={inputId}
@@ -135,7 +137,7 @@ export default function UploadWizard() {
           className="sr-only"
           onChange={(event) => handleFiles(event.target.files, true)}
         />
-      </motion.div>
+      </motion.label>
 
       {files.length > 0 && (
         <div className="rounded-2xl border border-white/10 bg-black/40 p-4 text-left">
