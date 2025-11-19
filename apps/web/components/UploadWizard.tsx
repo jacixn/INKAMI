@@ -3,7 +3,7 @@
 import axios from "axios";
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
-import { useMemo, useRef, useState } from "react";
+import { useId, useMemo, useRef, useState } from "react";
 
 import { apiBase } from "@/lib/api";
 
@@ -18,6 +18,7 @@ const dropHints = [
 export default function UploadWizard() {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
+  const inputId = useId();
   const [files, setFiles] = useState<File[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -116,19 +117,19 @@ export default function UploadWizard() {
             </span>
           ))}
         </div>
-        <button
-          type="button"
+        <label
+          htmlFor={inputId}
           className="mx-auto mt-6 inline-flex items-center gap-2 rounded-full bg-white px-6 py-3 text-sm font-semibold text-black shadow-lg shadow-purple-500/30"
-          onClick={() => inputRef.current?.click()}
         >
           Browse files
-        </button>
+        </label>
         <input
           ref={inputRef}
+          id={inputId}
           type="file"
           accept=".zip,.pdf,image/*"
           multiple
-          className="sr-only absolute h-0 w-0 opacity-0"
+          className="sr-only"
           onChange={(event) => handleFiles(event.target.files)}
         />
       </motion.div>
