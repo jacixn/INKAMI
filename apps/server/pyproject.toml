@@ -30,6 +30,7 @@ azure-cognitiveservices-speech = "^1.37.0"
 google-cloud-texttospeech = "^2.16.3"
 pytesseract = "^0.3.11"
 requests = "^2.32.3"
+pymupdf = "^1.26.6"
 
 [tool.poetry.group.vision]
 optional = true

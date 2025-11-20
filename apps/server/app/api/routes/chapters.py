@@ -7,6 +7,7 @@ from typing import Annotated
 from urllib.parse import urlparse, urlunparse
 import zipfile
 
+import fitz
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile, status
 from PIL import Image, UnidentifiedImageError
 
@@ -19,6 +20,7 @@ router = APIRouter()
 
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif"}
 ARCHIVE_EXTENSIONS = {".zip", ".cbz"}
+PDF_EXTENSIONS = {".pdf"}
 
 
 def _get_image_size(content: bytes) -> tuple[int | None, int | None]:
@@ -90,6 +92,39 @@ def _extract_archive_images(
     return extracted
 
 
+def _extract_pdf_images(
+    chapter_id: str,
+    start_index: int,
+    content: bytes,
+    upload_dir: Path,
+    base_url: str,
+    dpi: int = 220,
+) -> list[dict[str, str | int | None]]:
+    extracted: list[dict[str, str | int | None]] = []
+    try:
+        document = fitz.open(stream=content, filetype="pdf")
+    except fitz.FileDataError as exc:  # pragma: no cover - user input error
+        raise HTTPException(status_code=400, detail="Invalid PDF uploaded.") from exc
+
+    with document:
+        for page_number in range(document.page_count):
+            page = document.load_page(page_number)
+            pix = page.get_pixmap(dpi=dpi, alpha=False)
+            image_bytes = pix.tobytes("png")
+            saved = _persist_image_bytes(
+                chapter_id,
+                start_index + len(extracted),
+                ".png",
+                image_bytes,
+                upload_dir,
+                base_url,
+            )
+            if saved:
+                extracted.append(saved)
+
+    return extracted
+
+
 @router.post("", status_code=status.HTTP_201_CREATED)
 async def create_chapter(
     request: Request,
@@ -119,6 +154,18 @@ async def create_chapter(
 
         if suffix in ARCHIVE_EXTENSIONS:
             extracted = _extract_archive_images(
+                chapter_id,
+                page_index,
+                content,
+                upload_dir,
+                base_url,
+            )
+            saved_files.extend(extracted)
+            page_index += len(extracted)
+            continue
+
+        if suffix in PDF_EXTENSIONS:
+            extracted = _extract_pdf_images(
                 chapter_id,
                 page_index,
                 content,
