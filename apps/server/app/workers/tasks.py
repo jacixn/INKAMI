@@ -189,27 +189,6 @@ def _bubble_kind_from_analysis(analysis: CharacterAnalysis) -> str:
     return "dialogue"
 
 
-def _boxes_overlap(box_a: Sequence[float], box_b: Sequence[float], threshold: float = 0.6) -> bool:
-    if len(box_a) < 4 or len(box_b) < 4:
-        return False
-    ax1, ay1, ax2, ay2 = box_a
-    bx1, by1, bx2, by2 = box_b
-    ix1 = max(ax1, bx1)
-    iy1 = max(ay1, by1)
-    ix2 = min(ax2, bx2)
-    iy2 = min(ay2, by2)
-    if ix2 <= ix1 or iy2 <= iy1:
-        return False
-    intersection = (ix2 - ix1) * (iy2 - iy1)
-    area_a = max(0.0, ax2 - ax1) * max(0.0, ay2 - ay1)
-    area_b = max(0.0, bx2 - bx1) * max(0.0, by2 - by1)
-    union = area_a + area_b - intersection
-    if union <= 0:
-        return False
-    iou = intersection / union
-    return iou >= threshold
-
-
 def process_chapter(
     chapter_id: str,
     files: list[ChapterFile],
@@ -281,11 +260,22 @@ def process_chapter(
             if any(pattern in text_lower for pattern in APOLOGY_PATTERNS):
                 continue  # Skip apology, don't send to TTS
             
-            # DEDUPLICATE overlapping duplicates only
-            existing_boxes = seen_text_boxes.get(text_lower, [])
-            if any(_boxes_overlap(prev_box, bubble_box) for prev_box in existing_boxes):
+            # DEDUPLICATE: Skip if this text is a duplicate or substring of already-seen text
+            is_duplicate = False
+            for existing_text in seen_text_boxes.keys():
+                # Check if current text is a substring of existing (truncated duplicate)
+                if text_lower in existing_text or existing_text in text_lower:
+                    # Only skip if they're very similar (>80% match)
+                    longer = max(len(text_lower), len(existing_text))
+                    shorter = min(len(text_lower), len(existing_text))
+                    if shorter / longer > 0.8:
+                        is_duplicate = True
+                        break
+            
+            if is_duplicate:
                 continue
-            seen_text_boxes.setdefault(text_lower, []).append(list(bubble_box))
+            
+            seen_text_boxes[text_lower] = [list(bubble_box)]
                 
             character_key = (analysis.character_type or "").strip().lower()
             reuse_allowed = (
