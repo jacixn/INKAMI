@@ -238,9 +238,9 @@ def process_chapter(
         
         print(f"✨ Vision API found {len(vision_bubbles)} text elements (mode: {processing_mode})")
 
-        items: list[BubbleItem] = []
-        seen_text_boxes: dict[str, list[list[float]]] = {}
-        for bubble_idx, (bubble_box, text, analysis) in enumerate(vision_bubbles):
+        # STEP 1: Collect all candidate bubbles (filter out obvious junk)
+        candidates: list[tuple[list[float], str, Any, str]] = []
+        for bubble_box, text, analysis in vision_bubbles:
             normalized_text = _normalize_text(text)
             bubble_type = _bubble_kind_from_analysis(analysis)
             if processing_mode == "narrate" and bubble_type != "sfx":
@@ -249,33 +249,54 @@ def process_chapter(
             
             # FILTER OUT SFX AND HALLUCINATIONS
             if bubble_type == "sfx":
-                continue  # Completely skip SFX
+                continue
             if normalized_text.lower() in {"jason", "json"}:
-                continue # Skip specific hallucination
+                continue
             if len(normalized_text) < 2 and not normalized_text.isalnum():
-                continue # Skip single punctuation noise
-            
-            # FILTER OUT GPT APOLOGY PHRASES (before TTS)
-            text_lower = normalized_text.lower()
-            if any(pattern in text_lower for pattern in APOLOGY_PATTERNS):
-                continue  # Skip apology, don't send to TTS
-            
-            # DEDUPLICATE: Skip if this text is a duplicate or substring of already-seen text
-            is_duplicate = False
-            for existing_text in seen_text_boxes.keys():
-                # Check if current text is a substring of existing (truncated duplicate)
-                if text_lower in existing_text or existing_text in text_lower:
-                    # Only skip if they're very similar (>80% match)
-                    longer = max(len(text_lower), len(existing_text))
-                    shorter = min(len(text_lower), len(existing_text))
-                    if shorter / longer > 0.8:
-                        is_duplicate = True
-                        break
-            
-            if is_duplicate:
                 continue
             
-            seen_text_boxes[text_lower] = [list(bubble_box)]
+            # FILTER OUT GPT APOLOGY PHRASES
+            text_lower = normalized_text.lower()
+            if any(pattern in text_lower for pattern in APOLOGY_PATTERNS):
+                continue
+            
+            candidates.append((bubble_box, normalized_text, analysis, text_lower))
+        
+        # STEP 2: Deduplicate by keeping the LONGEST/MOST COMPLETE version of each sentence
+        unique_bubbles: list[tuple[list[float], str, Any]] = []
+        used_indices: set[int] = set()
+        
+        for i, (box_i, text_i, analysis_i, lower_i) in enumerate(candidates):
+            if i in used_indices:
+                continue
+            
+            # Find all similar texts (duplicates/substrings)
+            similar_group = [(i, box_i, text_i, analysis_i, lower_i)]
+            for j, (box_j, text_j, analysis_j, lower_j) in enumerate(candidates):
+                if j <= i or j in used_indices:
+                    continue
+                
+                # Check if they're substrings of each other
+                if lower_i in lower_j or lower_j in lower_i:
+                    longer = max(len(lower_i), len(lower_j))
+                    shorter = min(len(lower_i), len(lower_j))
+                    if shorter / longer > 0.8:  # >80% similar
+                        similar_group.append((j, box_j, text_j, analysis_j, lower_j))
+            
+            # Pick the LONGEST one from the group (most complete sentence)
+            best = max(similar_group, key=lambda x: len(x[4]))
+            unique_bubbles.append((best[1], best[2], best[3]))
+            
+            # Mark all in this group as used
+            for idx, *_ in similar_group:
+                used_indices.add(idx)
+        
+        print(f"✨ After deduplication: {len(unique_bubbles)} unique bubbles")
+
+        # STEP 3: Generate TTS for unique bubbles
+        items: list[BubbleItem] = []
+        for bubble_idx, (bubble_box, normalized_text, analysis) in enumerate(unique_bubbles):
+            bubble_type = _bubble_kind_from_analysis(analysis)
                 
             character_key = (analysis.character_type or "").strip().lower()
             reuse_allowed = (
