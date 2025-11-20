@@ -270,10 +270,10 @@ def process_chapter(
             if i in used_indices:
                 continue
             
-            # Find all similar texts (duplicates/substrings)
+            # Find all similar texts (duplicates/substrings) - check ALL candidates
             similar_group = [(i, box_i, text_i, analysis_i, lower_i)]
             for j, (box_j, text_j, analysis_j, lower_j) in enumerate(candidates):
-                if j <= i or j in used_indices:
+                if j == i or j in used_indices:  # Skip self and already-used
                     continue
                 
                 # Check if they're substrings of each other
