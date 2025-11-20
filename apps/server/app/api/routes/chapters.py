@@ -5,9 +5,10 @@ from io import BytesIO
 from pathlib import Path
 from typing import Annotated
 from urllib.parse import urlparse, urlunparse
+import zipfile
 
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile, status
-from PIL import Image
+from PIL import Image, UnidentifiedImageError
 
 from app.core.config import settings
 from app.models.schemas import ChapterPayload
@@ -15,6 +16,78 @@ from app.services.pipeline import chapter_store
 from app.workers.tasks import enqueue_chapter_job
 
 router = APIRouter()
+
+IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif"}
+ARCHIVE_EXTENSIONS = {".zip", ".cbz"}
+
+
+def _get_image_size(content: bytes) -> tuple[int | None, int | None]:
+    try:
+        with Image.open(BytesIO(content)) as img:
+            return img.size
+    except UnidentifiedImageError:
+        return None, None
+
+
+def _persist_image_bytes(
+    chapter_id: str,
+    index: int,
+    suffix: str,
+    content: bytes,
+    upload_dir: Path,
+    base_url: str,
+) -> dict[str, str | int | None] | None:
+    width, height = _get_image_size(content)
+    if width is None or height is None:
+        return None
+
+    safe_suffix = suffix if suffix in IMAGE_EXTENSIONS else ".png"
+    filename = f"{chapter_id}_{index:04d}{safe_suffix}"
+    file_path = upload_dir / filename
+    file_path.write_bytes(content)
+
+    return {
+        "filename": filename,
+        "image_url": f"{base_url}/uploads/{filename}",
+        "width": width,
+        "height": height,
+        "path": str(file_path),
+    }
+
+
+def _extract_archive_images(
+    chapter_id: str,
+    start_index: int,
+    content: bytes,
+    upload_dir: Path,
+    base_url: str,
+) -> list[dict[str, str | int | None]]:
+    extracted: list[dict[str, str | int | None]] = []
+    try:
+        with zipfile.ZipFile(BytesIO(content)) as archive:
+            members = sorted(
+                (name for name in archive.namelist() if not name.endswith("/")),
+                key=str.lower,
+            )
+            for member in members:
+                suffix = Path(member).suffix.lower()
+                if suffix not in IMAGE_EXTENSIONS:
+                    continue
+                data = archive.read(member)
+                saved = _persist_image_bytes(
+                    chapter_id,
+                    start_index + len(extracted),
+                    suffix,
+                    data,
+                    upload_dir,
+                    base_url,
+                )
+                if saved:
+                    extracted.append(saved)
+    except zipfile.BadZipFile as exc:  # pragma: no cover - user input error
+        raise HTTPException(status_code=400, detail="Invalid archive uploaded.") from exc
+
+    return extracted
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)
@@ -36,30 +109,37 @@ async def create_chapter(
     parsed = urlparse(base_url)
     if parsed.scheme == "http":
         base_url = urlunparse(parsed._replace(scheme="https"))
+
+    page_index = 0
     for index, file in enumerate(files):
         content = await file.read()
         if not content:
             continue
-        suffix = Path(file.filename or f"page_{index}.png").suffix or ".png"
-        storage_name = f"{chapter_id}_{index}{suffix}"
-        file_path = upload_dir / storage_name
-        file_path.write_bytes(content)
-        public_url = f"{base_url}/uploads/{storage_name}"
-        width = height = None
-        try:
-            with Image.open(BytesIO(content)) as img:
-                width, height = img.size
-        except Exception:
-            width = height = None
-        saved_files.append(
-            {
-                "filename": storage_name,
-                "image_url": public_url,
-                "width": width,
-                "height": height,
-                "path": str(file_path),
-            }
+        suffix = Path(file.filename or f"page_{index}.png").suffix.lower() or ".png"
+
+        if suffix in ARCHIVE_EXTENSIONS:
+            extracted = _extract_archive_images(
+                chapter_id,
+                page_index,
+                content,
+                upload_dir,
+                base_url,
+            )
+            saved_files.extend(extracted)
+            page_index += len(extracted)
+            continue
+
+        saved = _persist_image_bytes(
+            chapter_id,
+            page_index,
+            suffix,
+            content,
+            upload_dir,
+            base_url,
         )
+        if saved:
+            saved_files.append(saved)
+            page_index += 1
 
     if not saved_files:
         placeholder = f"{base_url}/static/placeholder-page.png"

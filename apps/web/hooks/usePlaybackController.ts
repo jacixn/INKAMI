@@ -2,10 +2,38 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import useSWR from "swr";
-import { fetcher } from "@/lib/api";
+import { apiBase, fetcher } from "@/lib/api";
 import type { BubbleItem, ChapterPayload, PlaybackController } from "@/lib/types";
 
 const NEXT_BUBBLE_DELAY_MS = 500;
+
+function resolveAudioUrl(raw?: string): string | undefined {
+  if (!raw) {
+    return undefined;
+  }
+  if (raw.startsWith("data:")) {
+    return raw;
+  }
+
+  try {
+    const parsed = new URL(raw);
+    if (
+      parsed.protocol === "http:" &&
+      parsed.hostname !== "localhost" &&
+      parsed.hostname !== "127.0.0.1"
+    ) {
+      parsed.protocol = "https:";
+      return parsed.toString();
+    }
+    return parsed.toString();
+  } catch {
+    const normalizedBase = apiBase.endsWith("/")
+      ? apiBase.slice(0, -1)
+      : apiBase;
+    const suffix = raw.startsWith("/") ? raw : `/${raw}`;
+    return `${normalizedBase}${suffix}`;
+  }
+}
 
 interface ControllerState extends PlaybackController {
   loading: boolean;
@@ -31,6 +59,14 @@ export function usePlaybackController(chapterId: string): ControllerState {
   const nextBubbleRef = useRef<() => void>(() => {});
 
   const pages = data?.pages ?? [];
+  const chapterReadingOrder = useMemo(() => {
+    return pages.flatMap((page) => {
+      if (page.reading_order?.length) {
+        return page.reading_order;
+      }
+      return page.items.map((item) => item.bubble_id);
+    });
+  }, [pages]);
 
   useEffect(() => {
     if (!pages.length) return;
@@ -50,19 +86,30 @@ export function usePlaybackController(chapterId: string): ControllerState {
   }, [pages]);
 
   const currentPage = pages[currentPageIndex];
-  const readingOrder = currentPage?.reading_order ?? [];
-
   useEffect(() => {
+    if (currentBubbleId) return;
     const page = pages[currentPageIndex];
     if (!page) return;
-    const valid = page.items.some((item) => item.bubble_id === currentBubbleId);
-    if (!valid) {
-      const fallback = page.reading_order?.[0] ?? page.items[0]?.bubble_id;
-      if (fallback) {
-        setCurrentBubbleId(fallback);
-      }
+    const fallback = page.reading_order?.[0] ?? page.items[0]?.bubble_id;
+    if (fallback) {
+      setCurrentBubbleId(fallback);
     }
   }, [pages, currentPageIndex, currentBubbleId]);
+
+  useEffect(() => {
+    if (!currentBubbleId) return;
+    const target = bubbleMap.get(currentBubbleId);
+    if (!target) {
+      if (chapterReadingOrder.length) {
+        setCurrentBubbleId(chapterReadingOrder[0]);
+        setCurrentPageIndex(0);
+      }
+      return;
+    }
+    if (target.pageIndex !== currentPageIndex) {
+      setCurrentPageIndex(target.pageIndex);
+    }
+  }, [bubbleMap, chapterReadingOrder, currentBubbleId, currentPageIndex]);
 
   useEffect(() => {
     setCurrentPageIndex(0);
@@ -88,11 +135,6 @@ export function usePlaybackController(chapterId: string): ControllerState {
       }
       cancelSpeech();
 
-      const shouldUseSpeech =
-        (!target.bubble.audio_url || target.bubble.audio_url.trim() === "") &&
-        typeof window !== "undefined" &&
-        "speechSynthesis" in window;
-
       const scheduleNext = () => {
         const gap = Math.max(
           250,
@@ -105,7 +147,14 @@ export function usePlaybackController(chapterId: string): ControllerState {
         window.setTimeout(() => nextBubbleRef.current(), gap);
       };
 
-      if (shouldUseSpeech) {
+      const startSpeechPlayback = () => {
+        if (
+          typeof window === "undefined" ||
+          !("speechSynthesis" in window) ||
+          !target.bubble.text.trim()
+        ) {
+          return false;
+        }
         const utterance = new SpeechSynthesisUtterance(target.bubble.text);
         utterance.rate = speed;
         utterance.onend = () => {
@@ -124,18 +173,36 @@ export function usePlaybackController(chapterId: string): ControllerState {
         speechRef.current = utterance;
         window.speechSynthesis.speak(utterance);
         setIsPlaying(true);
+        return true;
+      };
+
+      const resolvedUrl = resolveAudioUrl(target.bubble.audio_url);
+
+      if (!resolvedUrl) {
+        if (!startSpeechPlayback()) {
+          setErrors((prev) => [...prev, `Missing audio for ${bubbleId}`]);
+          setIsPlaying(false);
+        }
         return;
       }
 
-      const audio = new Audio(target.bubble.audio_url);
+      const audio = new Audio(resolvedUrl);
+      audio.crossOrigin = "anonymous";
       audio.playbackRate = speed;
       audio.onended = () => {
         setIsPlaying(false);
         scheduleNext();
       };
       audio.onerror = () => {
-        setErrors((prev) => [...prev, `Audio failed for ${bubbleId}`]);
-        setIsPlaying(false);
+        audioRef.current = undefined;
+        const fallbackWorked = startSpeechPlayback();
+        setErrors((prev) => [
+          ...prev,
+          `Audio failed for ${bubbleId}${fallbackWorked ? ", using device voice." : ""}`
+        ]);
+        if (!fallbackWorked) {
+          setIsPlaying(false);
+        }
       };
 
       audioRef.current = audio;
@@ -143,14 +210,17 @@ export function usePlaybackController(chapterId: string): ControllerState {
         await audio.play();
         setIsPlaying(true);
       } catch (err) {
+        audioRef.current = undefined;
+        const fallbackWorked = startSpeechPlayback();
         setErrors((prev) => [
           ...prev,
           err instanceof Error ? err.message : "Playback failed"
         ]);
-        setIsPlaying(false);
+        if (!fallbackWorked) {
+          setIsPlaying(false);
+        }
       }
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [bubbleMap, speed, cancelSpeech]
   );
 
@@ -167,17 +237,41 @@ export function usePlaybackController(chapterId: string): ControllerState {
     [bubbleMap, isPlaying, loadAudio]
   );
 
+  const selectPage = useCallback(
+    (index: number) => {
+      setCurrentPageIndex(index);
+      const page = pages[index];
+      if (!page) return;
+      const fallback = page.reading_order?.[0] ?? page.items[0]?.bubble_id;
+      if (!fallback) return;
+      setCurrentBubbleId(fallback);
+      cancelSpeech();
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = undefined;
+      }
+      if (isPlaying) {
+        void loadAudio(fallback);
+      } else {
+        setIsPlaying(false);
+      }
+    },
+    [cancelSpeech, isPlaying, loadAudio, pages]
+  );
+
   const play = useCallback(() => {
     if (!currentBubbleId) {
-      const firstBubble = readingOrder[0];
+      const firstBubble = chapterReadingOrder[0];
       if (firstBubble) {
         setCurrentBubbleId(firstBubble);
         void loadAudio(firstBubble);
         return;
       }
     }
-    void loadAudio(currentBubbleId);
-  }, [currentBubbleId, loadAudio, readingOrder]);
+    if (currentBubbleId) {
+      void loadAudio(currentBubbleId);
+    }
+  }, [chapterReadingOrder, currentBubbleId, loadAudio]);
 
   const pause = useCallback(() => {
     cancelSpeech();
@@ -188,14 +282,16 @@ export function usePlaybackController(chapterId: string): ControllerState {
 
   const advanceBubble = useCallback(
     (autoPlay: boolean) => {
-      if (!readingOrder.length) return;
-      const index = readingOrder.findIndex((id) => id === currentBubbleId);
-      const nextId =
-        index >= 0 && index + 1 < readingOrder.length
-          ? readingOrder[index + 1]
-          : index < 0
-            ? readingOrder[0]
-            : undefined;
+      if (!chapterReadingOrder.length) return;
+      const index = chapterReadingOrder.findIndex((id) => id === currentBubbleId);
+      let nextId: string | undefined;
+      if (index >= 0 && index + 1 < chapterReadingOrder.length) {
+        nextId = chapterReadingOrder[index + 1];
+      } else if (index < 0) {
+        nextId = chapterReadingOrder[0];
+      } else if (!autoPlay) {
+        nextId = chapterReadingOrder[0];
+      }
       if (nextId) {
         setCurrentBubbleId(nextId);
         if (autoPlay || isPlaying) {
@@ -205,23 +301,29 @@ export function usePlaybackController(chapterId: string): ControllerState {
         setIsPlaying(false);
       }
     },
-    [currentBubbleId, isPlaying, loadAudio, readingOrder]
+    [chapterReadingOrder, currentBubbleId, isPlaying, loadAudio]
   );
 
   const nextBubble = useCallback(() => advanceBubble(false), [advanceBubble]);
 
   const prevBubble = useCallback(() => {
-    if (!readingOrder.length) return;
-    const index = readingOrder.findIndex((id) => id === currentBubbleId);
-    const prevId =
-      index > 0 ? readingOrder[index - 1] : readingOrder[readingOrder.length - 1];
+    if (!chapterReadingOrder.length) return;
+    const index = chapterReadingOrder.findIndex((id) => id === currentBubbleId);
+    let prevId: string | undefined;
+    if (index > 0) {
+      prevId = chapterReadingOrder[index - 1];
+    } else if (index === 0) {
+      prevId = chapterReadingOrder[chapterReadingOrder.length - 1];
+    } else {
+      prevId = chapterReadingOrder[0];
+    }
     if (prevId) {
       setCurrentBubbleId(prevId);
       if (isPlaying) {
         void loadAudio(prevId);
       }
     }
-  }, [currentBubbleId, isPlaying, loadAudio, readingOrder]);
+  }, [chapterReadingOrder, currentBubbleId, isPlaying, loadAudio]);
 
   useEffect(() => {
     if (audioRef.current) {
@@ -242,11 +344,14 @@ export function usePlaybackController(chapterId: string): ControllerState {
 
   const restart = useCallback(() => {
     if (!pages.length) return;
-    const firstPage = pages[0];
-    const firstBubbleId =
-      firstPage.reading_order?.[0] ?? firstPage.items[0]?.bubble_id;
+    const firstBubbleId = chapterReadingOrder[0];
     if (!firstBubbleId) return;
-    setCurrentPageIndex(0);
+    const target = bubbleMap.get(firstBubbleId);
+    if (target) {
+      setCurrentPageIndex(target.pageIndex);
+    } else {
+      setCurrentPageIndex(0);
+    }
     setCurrentBubbleId(firstBubbleId);
     cancelSpeech();
     if (audioRef.current) {
@@ -254,7 +359,11 @@ export function usePlaybackController(chapterId: string): ControllerState {
       audioRef.current = undefined;
     }
     void loadAudio(firstBubbleId);
-  }, [cancelSpeech, loadAudio, pages]);
+  }, [bubbleMap, cancelSpeech, chapterReadingOrder, loadAudio, pages]);
+
+  const clearErrors = useCallback(() => {
+    setErrors([]);
+  }, []);
 
   const combinedErrors = networkError ? [networkError, ...errors] : errors;
 
@@ -266,7 +375,7 @@ export function usePlaybackController(chapterId: string): ControllerState {
     isPlaying,
     speed,
     errors: combinedErrors,
-    selectPage: setCurrentPageIndex,
+    selectPage,
     play,
     pause,
     nextBubble,
@@ -274,6 +383,7 @@ export function usePlaybackController(chapterId: string): ControllerState {
     setSpeed,
     setBubble,
     restart,
+    clearErrors,
     loading,
     chapter: data
   };

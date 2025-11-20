@@ -1,0 +1,7 @@
+# Cursor Rules
+
+- Always consult `memory-bank/` documents before making changes.
+- Web app leans on Tailwind and App Router; prefer modifying shared components (`AppShell`, `BottomNav`) rather than duplicating layout logic.
+- Respect static export constraints: avoid server-only APIs in client components unless guarded.
+- Use absolute paths for tool commands as per user preference.
+

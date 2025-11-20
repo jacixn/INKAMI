@@ -53,6 +53,7 @@ export interface PlaybackController {
   setSpeed: (value: number) => void;
   setBubble: (bubbleId: string) => void;
   restart: () => void;
+  clearErrors: () => void;
   loading?: boolean;
 }
 

@@ -192,8 +192,30 @@ export default function ImmersiveReader({ controller }: ImmersiveReaderProps) {
     isFullscreen && "fixed inset-0 z-50 h-screen w-full rounded-none border-none bg-black"
   );
 
+  const errorMessage = controller.errors.at(-1);
+
   return (
     <div className="space-y-4">
+      {errorMessage && (
+        <div className="flex items-start justify-between gap-4 rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-red-200">
+              Playback issue
+            </p>
+            <p className="mt-1 text-red-50">{errorMessage}</p>
+            <p className="mt-1 text-xs text-red-100/80">
+              We will automatically fall back to your device voice if the narrated audio can&apos;t load.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={controller.clearErrors}
+            className="rounded-full border border-red-400/40 px-3 py-1 text-xs font-semibold text-red-50 transition hover:border-red-200/80"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
       <div
         ref={fullscreenRef}
         className={containerClasses}

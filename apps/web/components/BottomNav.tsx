@@ -22,8 +22,8 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   {
-    label: "Listen",
-    href: "/reader",
+    label: "Home",
+    href: "/",
     icon: (active: boolean) => (
       <svg
         width="20"
@@ -34,8 +34,7 @@ const navItems: NavItem[] = [
         className={active ? "text-white" : "text-white/60"}
       >
         <path
-          d="M6.5 5v10l7-5-7-5Z"
-          fill="currentColor"
+          d="M4 9.5 10 4l6 5.5V16a1 1 0 0 1-1 1h-4v-4H9v4H5a1 1 0 0 1-1-1V9.5Z"
           stroke="currentColor"
           strokeWidth="1.3"
           strokeLinejoin="round"
@@ -87,8 +86,8 @@ const navItems: NavItem[] = [
     )
   },
   {
-    label: "Home",
-    href: "/",
+    label: "Listen",
+    href: "/reader",
     icon: (active: boolean) => (
       <svg
         width="20"
@@ -99,7 +98,8 @@ const navItems: NavItem[] = [
         className={active ? "text-white" : "text-white/60"}
       >
         <path
-          d="M4 9.5 10 4l6 5.5V16a1 1 0 0 1-1 1h-4v-4H9v4H5a1 1 0 0 1-1-1V9.5Z"
+          d="M6.5 5v10l7-5-7-5Z"
+          fill="currentColor"
           stroke="currentColor"
           strokeWidth="1.3"
           strokeLinejoin="round"

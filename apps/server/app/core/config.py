@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     azure_speech_region: str | None = None
     google_application_credentials: str | None = None
     tts_provider_priority: str = "openai"
+    force_https_assets: bool = True
 
 
 @lru_cache(maxsize=1)

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import BinaryIO
+from urllib.parse import urlparse, urlunparse
 
 import boto3
 import requests
@@ -24,6 +25,7 @@ class StorageClient:
             )
             self._session = None
         self._bucket = settings.s3_bucket
+        self._force_https = settings.force_https_assets
 
     def upload_file(self, key: str, fileobj: BinaryIO, content_type: str) -> str:
         if self._is_supabase:
@@ -37,7 +39,8 @@ class StorageClient:
             key,
             ExtraArgs={"ContentType": content_type},
         )
-        return f"{settings.s3_endpoint}/{self._bucket}/{key}"
+        url = f"{settings.s3_endpoint}/{self._bucket}/{key}"
+        return self._normalize_url(url)
 
     def put_bytes(self, key: str, data: bytes, content_type: str) -> str:
         if self._is_supabase:
@@ -50,7 +53,8 @@ class StorageClient:
                 Body=data,
                 ContentType=content_type,
             )
-            return f"{settings.s3_endpoint}/{self._bucket}/{key}"
+            url = f"{settings.s3_endpoint}/{self._bucket}/{key}"
+            return self._normalize_url(url)
         except Exception as e:
             print(f"❌ Storage upload failed: {type(e).__name__}: {str(e)}")
             # Return a data URL as fallback
@@ -80,7 +84,19 @@ class StorageClient:
             return f"data:{content_type};base64,{encoded}"
 
         # make asset publicly accessible
-        return f"{endpoint}/object/public/{self._bucket}/{key}"
+        url = f"{endpoint}/object/public/{self._bucket}/{key}"
+        return self._normalize_url(url)
+
+    def _normalize_url(self, url: str) -> str:
+        if not self._force_https:
+            return url
+        parsed = urlparse(url)
+        if (
+            parsed.scheme == "http"
+            and parsed.hostname not in {"localhost", "127.0.0.1"}
+        ):
+            return urlunparse(parsed._replace(scheme="https"))
+        return url
 
 
 storage_client = StorageClient()

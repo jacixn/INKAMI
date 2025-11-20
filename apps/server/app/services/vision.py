@@ -580,9 +580,13 @@ class VisionService:
         return base64.b64encode(buffered.getvalue()).decode()
 
     def _segment_vertical_ranges(
-        self, height: int, max_height: int = 2200, overlap: int = 200
+        self, height: int, max_height: int = 1800, overlap: int = 600
     ) -> list[tuple[int, int]]:
-        """Split tall/scrolling pages into overlapping slices for better OCR."""
+        """Split tall/scrolling pages into overlapping slices for better OCR.
+        
+        Increased overlap (600px) ensures stacked bubbles appear fully in at least one slice.
+        Reduced max_height (1800px) keeps text larger and easier for GPT-4o to read.
+        """
         if height <= max_height:
             return [(0, height)]
 
