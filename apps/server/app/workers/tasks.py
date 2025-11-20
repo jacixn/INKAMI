@@ -263,6 +263,10 @@ def process_chapter(
             candidates.append((bubble_box, normalized_text, analysis, text_lower))
         
         # STEP 2: Deduplicate by keeping the LONGEST/MOST COMPLETE version of each sentence
+        def normalize_for_comparison(text: str) -> str:
+            """Remove spaces, hyphens, and extra whitespace for accurate duplicate detection."""
+            return text.replace(" ", "").replace("-", "").replace("\n", "").replace("\r", "")
+        
         unique_bubbles: list[tuple[list[float], str, Any]] = []
         used_indices: set[int] = set()
         
@@ -270,21 +274,27 @@ def process_chapter(
             if i in used_indices:
                 continue
             
+            # Normalize for comparison (remove spaces/hyphens)
+            normalized_i = normalize_for_comparison(lower_i)
+            
             # Find all similar texts (duplicates/substrings) - check ALL candidates
-            similar_group = [(i, box_i, text_i, analysis_i, lower_i)]
+            similar_group = [(i, box_i, text_i, analysis_i, lower_i, normalized_i)]
             for j, (box_j, text_j, analysis_j, lower_j) in enumerate(candidates):
                 if j == i or j in used_indices:  # Skip self and already-used
                     continue
                 
-                # Check if they're substrings of each other
-                if lower_i in lower_j or lower_j in lower_i:
-                    longer = max(len(lower_i), len(lower_j))
-                    shorter = min(len(lower_i), len(lower_j))
-                    if shorter / longer > 0.8:  # >80% similar
-                        similar_group.append((j, box_j, text_j, analysis_j, lower_j))
+                normalized_j = normalize_for_comparison(lower_j)
+                
+                # Check if they're substrings of each other (using normalized versions)
+                if normalized_i in normalized_j or normalized_j in normalized_i:
+                    longer = max(len(normalized_i), len(normalized_j))
+                    shorter = min(len(normalized_i), len(normalized_j))
+                    if shorter / longer > 0.75:  # >75% similar (lowered from 80% to catch more)
+                        similar_group.append((j, box_j, text_j, analysis_j, lower_j, normalized_j))
             
             # Pick the LONGEST one from the group (most complete sentence)
-            best = max(similar_group, key=lambda x: len(x[4]))
+            # Use the normalized length for comparison
+            best = max(similar_group, key=lambda x: len(x[5]))
             unique_bubbles.append((best[1], best[2], best[3]))
             
             # Mark all in this group as used
