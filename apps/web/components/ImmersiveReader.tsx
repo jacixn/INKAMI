@@ -20,10 +20,10 @@ function smoothScrollTo(
   element: HTMLElement,
   target: number,
   duration: number
-): (() => void) | undefined {
+): (() => void) | null {
   if (duration <= 0) {
     element.scrollTop = target;
-    return;
+    return null;
   }
 
   const start = element.scrollTop;
