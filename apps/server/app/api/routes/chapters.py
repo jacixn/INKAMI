@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import uuid
+from concurrent.futures import ThreadPoolExecutor
+import os
 from io import BytesIO
 from pathlib import Path
 from typing import Annotated
@@ -92,35 +94,69 @@ def _extract_archive_images(
     return extracted
 
 
+def _effective_dpi_for_page(page: fitz.Page, base_dpi: int) -> int:
+    height_points = page.rect.height
+    # Very tall scroll pages become huge bitmaps at 220 DPI.
+    if height_points >= 1200:  # ~16.5 inches
+        return max(160, base_dpi - 40)
+    if height_points >= 900:
+        return max(170, base_dpi - 20)
+    return base_dpi
+
+
+def _render_pdf_page(content: bytes, page_number: int, base_dpi: int) -> bytes:
+    with fitz.open(stream=content, filetype="pdf") as document:
+        page = document.load_page(page_number)
+        dpi = _effective_dpi_for_page(page, base_dpi)
+        pix = page.get_pixmap(dpi=dpi, colorspace=fitz.csRGB, alpha=False)
+        return pix.tobytes("png")
+
+
 def _extract_pdf_images(
     chapter_id: str,
     start_index: int,
     content: bytes,
     upload_dir: Path,
     base_url: str,
-    dpi: int = 220,
+    base_dpi: int = 210,
 ) -> list[dict[str, str | int | None]]:
-    extracted: list[dict[str, str | int | None]] = []
     try:
-        document = fitz.open(stream=content, filetype="pdf")
+        with fitz.open(stream=content, filetype="pdf") as document:
+            page_count = document.page_count
     except fitz.FileDataError as exc:  # pragma: no cover - user input error
         raise HTTPException(status_code=400, detail="Invalid PDF uploaded.") from exc
 
-    with document:
-        for page_number in range(document.page_count):
-            page = document.load_page(page_number)
-            pix = page.get_pixmap(dpi=dpi, alpha=False)
-            image_bytes = pix.tobytes("png")
-            saved = _persist_image_bytes(
-                chapter_id,
-                start_index + len(extracted),
-                ".png",
-                image_bytes,
-                upload_dir,
-                base_url,
-            )
-            if saved:
-                extracted.append(saved)
+    extracted: list[dict[str, str | int | None]] = []
+    results: list[tuple[int, bytes]] = []
+    cpu_count = os.cpu_count() or 4
+    max_workers = max(2, min(8, cpu_count, page_count))
+
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = [
+            executor.submit(_render_pdf_page, content, page_number, base_dpi)
+            for page_number in range(page_count)
+        ]
+        for page_number, future in enumerate(futures):
+            try:
+                image_bytes = future.result()
+            except Exception as exc:  # pragma: no cover - safety
+                raise HTTPException(
+                    status_code=500, detail=f"Failed to render PDF page {page_number + 1}: {exc}"
+                ) from exc
+            results.append((page_number, image_bytes))
+
+    results.sort(key=lambda item: item[0])
+    for offset, (_, image_bytes) in enumerate(results):
+        saved = _persist_image_bytes(
+            chapter_id,
+            start_index + offset,
+            ".png",
+            image_bytes,
+            upload_dir,
+            base_url,
+        )
+        if saved:
+            extracted.append(saved)
 
     return extracted
 

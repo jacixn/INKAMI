@@ -13,6 +13,7 @@ primary_region = 'iad'
   APP_ENV = 'prod'
   JOB_QUEUE_NAME = 'inkami'
   PORT = '8080'
+  FRONTEND_URL = 'https://jacixn.github.io/INKAMI'
 
 [processes]
   web = 'poetry run uvicorn app.main:app --host 0.0.0.0 --port 8080'

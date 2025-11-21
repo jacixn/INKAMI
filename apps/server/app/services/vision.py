@@ -7,10 +7,17 @@ import re
 import time
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import requests
+from PIL import Image
 
 from app.core.config import settings
+
+try:  # Optional dependency; degrade gracefully if unavailable
+    from paddleocr import PaddleOCR  # type: ignore
+except Exception:  # pragma: no cover - optional import
+    PaddleOCR = None  # type: ignore
 
 
 @dataclass
@@ -70,6 +77,26 @@ class VisionService:
         "system": "voice_system",
     }
 
+    def __init__(self) -> None:
+        self._local_detector = None
+        self._full_page_first = settings.vision_single_pass
+        if settings.enable_local_detector and PaddleOCR is not None:
+            try:
+                self._local_detector = PaddleOCR(
+                    det=True,
+                    rec=False,
+                    cls=False,
+                    use_angle_cls=False,
+                    lang="en",
+                    show_log=False,
+                )
+                print("✨ Local bubble detector enabled (PaddleOCR)")
+            except Exception as exc:  # pragma: no cover - initialization edge cases
+                self._local_detector = None
+                print(f"⚠️ Local bubble detector unavailable: {exc}")
+        elif settings.enable_local_detector:
+            print("⚠️ PaddleOCR not installed; local detector disabled")
+
     def detect_and_read_all_bubbles(self, image_path: Path) -> list[tuple[list[int], str, CharacterAnalysis]]:
         """Use AI vision to find ALL text bubbles and read them in one go."""
         
@@ -78,102 +105,46 @@ class VisionService:
             return []
         
         try:
-            # Load and optionally split the image for long-scroll chapters
-            from PIL import Image
+            color_image = Image.open(image_path)
+            width, height = color_image.size
+            grayscale_image = color_image.convert("L")
+            color_image.close()
 
-            image = Image.open(image_path)
-            width, height = image.size
-            segments = self._segment_vertical_ranges(height)
+            local_boxes = self._detect_bubble_boxes_local(image_path, width, height)
+            local_bubbles: list[tuple[list[int], str, CharacterAnalysis]] = []
+            if local_boxes:
+                print(f"🧠 Local detector found {len(local_boxes)} candidate bubble boxes")
+                local_bubbles = self._transcribe_local_boxes(
+                    image_path,
+                    local_boxes,
+                    height,
+                )
+                if local_bubbles:
+                    print(f"✨ Local pipeline transcribed {len(local_bubbles)} bubble(s)")
 
-            prompt = (
-                "You are an expert manga letterer and voice director. "
-                "Look at the ENTIRE page and extract EVERY readable text element: speech bubbles, narration boxes, "
-                "system/U.I. panels, glowing screens, and sound effects. "
-                "Return results in reading order (top-to-bottom, left-to-right) as STRICT JSON (no narration outside JSON). "
-                "Each entry must be an object with: "
-                '{"text":"..." , "speaker_gender":"male|female|unknown", '
-                '"speaker_age":"child|teen|young adult|adult", '
-                '"emotion":"happy|sad|angry|scared|serious|neutral", '
-                '"tone":"playful|serious|questioning|dramatic|neutral", '
-                '"bubble_type":"dialogue|thought|narration|system|sfx" }.'
+            remote_bubbles = self._run_segment_pipeline(
+                grayscale_image, width, height, single_pass=self._full_page_first
             )
-
-            print(
-                f"🧩 Vision segmentation: {len(segments)} slice(s) for page height {height}px"
-            )
-
-            bubbles: list[tuple[list[int], str, CharacterAnalysis]] = []
-            seen_signatures: set[tuple[str, int]] = set()
-            total_entries = 0
-
-            for seg_index, (start_y, end_y) in enumerate(segments, start=1):
-                crop = image.crop((0, start_y, width, end_y))
-                img_base64 = self._encode_image(crop)
-                segment_height = end_y - start_y
-                segment_prompt = prompt
-                if len(segments) > 1:
-                    segment_prompt += (
-                        f" You are looking only at segment {seg_index} of {len(segments)}, "
-                        f"covering vertical pixels {start_y} through {end_y}. "
-                        "Focus on text inside this slice only."
-                    )
-
+            if self._full_page_first and not remote_bubbles:
                 print(
-                    f"🤖 Calling GPT-4o-mini for slice {seg_index}/{len(segments)} "
-                    f"(height {segment_height}px)"
+                    "⚠️ Full-page vision pass returned no text; "
+                    "falling back to segmented slices."
                 )
-                content = self._call_openai(segment_prompt, img_base64, max_tokens=700)
-                if not content:
-                    print(f"⚠️ Vision API returned no text for slice {seg_index}")
-                    continue
-                print(f"📝 Vision response (slice {seg_index}):\n{content}")
-
-                entries = self._parse_detected_entries(content)
-                if not entries:
-                    print(f"⚠️ Could not parse text entries for slice {seg_index}")
-                    continue
-
-                slice_boxes = self._approximate_bubble_boxes(
-                    len(entries), width, segment_height
+                remote_bubbles = self._run_segment_pipeline(
+                    grayscale_image, width, height, single_pass=False
                 )
-                for idx, entry in enumerate(entries):
-                    text = entry.text.strip()
-                    if not text:
-                        continue
-                    box = (
-                        slice_boxes[idx]
-                        if idx < len(slice_boxes)
-                        else [80, 40, width - 80, segment_height - 40]
-                    )
-                    adjusted_box = [
-                        box[0],
-                        box[1] + start_y,
-                        box[2],
-                        box[3] + start_y,
-                    ]
-                    signature = self._entry_signature(text, adjusted_box)
-                    if signature in seen_signatures:
-                        continue
-                    seen_signatures.add(signature)
+            grayscale_image.close()
 
-                    analysis = self._analysis_from_entry(
-                        entry, text, adjusted_box, height
-                    )
-                    bubbles.append((adjusted_box, text, analysis))
-                    total_entries += 1
-                    print(
-                        f"✨ Vision detected text #{total_entries}: {text[:60]} "
-                        f"(slice {seg_index})"
-                    )
-
-            if not bubbles:
-                print("⚠️ Vision API did not return any usable text entries")
-            else:
+            if local_bubbles and remote_bubbles:
+                merged = self._merge_bubble_sets(local_bubbles, remote_bubbles)
                 print(
-                    f"✨ Vision API found {total_entries} text elements across {len(segments)} slice(s)"
+                    f"🤝 Hybrid vision kept {len(merged)} bubbles "
+                    f"(local {len(local_bubbles)} + remote {len(remote_bubbles)})"
                 )
-
-            return bubbles
+                return merged
+            if local_bubbles:
+                return local_bubbles
+            return remote_bubbles
             
         except Exception as e:
             print(f"❌ Vision API failed: {type(e).__name__}: {str(e)}")
@@ -346,14 +317,19 @@ class VisionService:
         if not content:
             return []
         
+        normalized = self._strip_code_fences(content)
+        parsed: Any | None = None
         try:
-            normalized = self._strip_code_fences(content)
             parsed = json.loads(normalized)
+        except json.JSONDecodeError:
+            parsed = None
+        
+        if parsed is not None:
             entries = self._extract_entries_from_structure(parsed)
             if entries:
                 return entries
-        except json.JSONDecodeError:
-            pass
+            # Parsed JSON but no usable entries (e.g., empty list) -> treat as no text
+            return []
         
         fallback_texts = self._split_plain_text(content)
         return [VisionTextEntry(text=text) for text in fallback_texts]
@@ -579,21 +555,134 @@ class VisionService:
         image.save(buffered, format="PNG")
         return base64.b64encode(buffered.getvalue()).decode()
 
+    def _run_segment_pipeline(
+        self,
+        image: Image.Image,
+        width: int,
+        height: int,
+        *,
+        single_pass: bool = False,
+    ) -> list[tuple[list[int], str, CharacterAnalysis]]:
+        segments = (
+            [(0, height)] if single_pass else self._segment_vertical_ranges(height)
+        )
+        prompt = (
+            "You are an expert manga letterer and voice director. "
+            "Look at the ENTIRE page and extract EVERY readable text element: speech bubbles, narration boxes, "
+            "system/U.I. panels, glowing screens, and sound effects. "
+            "Return results in reading order (top-to-bottom, left-to-right) as STRICT JSON (no narration outside JSON). "
+            "Each entry must be an object with: "
+            '{"text":"..." , "speaker_gender":"male|female|unknown", '
+            '"speaker_age":"child|teen|young adult|adult", '
+            '"emotion":"happy|sad|angry|scared|serious|neutral", '
+            '"tone":"playful|serious|questioning|dramatic|neutral", '
+            '"bubble_type":"dialogue|thought|narration|system|sfx" }.'
+        )
+
+        print(
+            f"🧩 Vision segmentation: {len(segments)} slice(s) for page height {height}px "
+            f"(single_pass={single_pass})"
+        )
+
+        bubbles: list[tuple[list[int], str, CharacterAnalysis]] = []
+        seen_signatures: set[tuple[str, int]] = set()
+        total_entries = 0
+
+        def run_segment(
+            seg_index: int,
+            total_segments: int,
+            start_y: int,
+            end_y: int,
+            img_base64: str,
+        ) -> tuple[int, int, int, str | None]:
+            segment_prompt = prompt
+            if total_segments > 1:
+                segment_prompt += (
+                    f" You are looking only at segment {seg_index} of {total_segments}, "
+                    f"covering vertical pixels {start_y} through {end_y}. "
+                    "Focus on text inside this slice only."
+                )
+            segment_height = end_y - start_y
+            print(
+                f"🤖 Calling GPT-4o-mini for slice {seg_index}/{total_segments} "
+                f"(height {segment_height}px)"
+            )
+            content = self._call_openai(segment_prompt, img_base64, max_tokens=700)
+            if not content:
+                print(f"⚠️ Vision API returned no text for slice {seg_index}")
+            else:
+                print(f"📝 Vision response (slice {seg_index}):\n{content}")
+            return seg_index, start_y, end_y, content
+
+        segment_jobs: list[tuple[int, int, int, str | None]] = []
+        for seg_index, (start_y, end_y) in enumerate(segments, start=1):
+            crop = image.crop((0, start_y, width, end_y))
+            img_base64 = self._encode_image(crop)
+            segment_jobs.append(
+                run_segment(seg_index, len(segments), start_y, end_y, img_base64)
+            )
+
+        segment_jobs.sort(key=lambda item: item[0])
+
+        for seg_index, start_y, end_y, content in segment_jobs:
+            if not content:
+                continue
+            segment_height = end_y - start_y
+            entries = self._parse_detected_entries(content)
+            if not entries:
+                print(f"⚠️ Could not parse text entries for slice {seg_index}")
+                continue
+
+            slice_boxes = self._approximate_bubble_boxes(
+                len(entries), width, segment_height
+            )
+            for idx, entry in enumerate(entries):
+                text = entry.text.strip()
+                if not text:
+                    continue
+                box = (
+                    slice_boxes[idx]
+                    if idx < len(slice_boxes)
+                    else [80, 40, width - 80, segment_height - 40]
+                )
+                adjusted_box = [
+                    box[0],
+                    box[1] + start_y,
+                    box[2],
+                    box[3] + start_y,
+                ]
+                signature = self._entry_signature(text, adjusted_box)
+                if signature in seen_signatures:
+                    continue
+                seen_signatures.add(signature)
+
+                analysis = self._analysis_from_entry(
+                    entry, text, adjusted_box, height
+                )
+                bubbles.append((adjusted_box, text, analysis))
+                total_entries += 1
+                print(
+                    f"✨ Vision detected text #{total_entries}: {text[:60]} "
+                    f"(slice {seg_index})"
+                )
+
+        if not bubbles:
+            print("⚠️ Vision API did not return any usable text entries")
+        else:
+            print(
+                f"✨ Vision API found {total_entries} text elements across {len(segments)} slice(s)"
+            )
+
+        return bubbles
+
     def _segment_vertical_ranges(
-        self, height: int, max_height: int = 1500, overlap: int = 1000
+        self, height: int, max_height: int = 2600, overlap: int = 900
     ) -> list[tuple[int, int]]:
-        """Split tall/scrolling pages into overlapping slices for better OCR.
-        
-        Very large overlap (1000px) ensures stacked bubbles near slice boundaries
-        appear fully in at least one slice. Smaller max_height (1500px) keeps text
-        larger and makes bubbles more likely to be fully contained in one segment.
-        """
+        """Split tall/scrolling pages into overlapping slices for better OCR."""
         if height <= max_height:
             return [(0, height)]
 
-        # Ensure overlap doesn't exceed half the max height
         overlap = min(overlap, max_height // 2)
-        step = max(400, max_height - overlap)
 
         ranges: list[tuple[int, int]] = []
         start = 0
@@ -643,6 +732,152 @@ class VisionService:
             )
         return boxes
 
+    def _detect_bubble_boxes_local(
+        self,
+        image_path: Path,
+        page_width: int,
+        page_height: int,
+    ) -> list[list[int]]:
+        if not self._local_detector:
+            return []
+        try:
+            detections = self._local_detector.ocr(
+                str(image_path),
+                det=True,
+                rec=False,
+                cls=False,
+            )
+        except Exception as exc:  # pragma: no cover - detector edge
+            print(f"⚠️ Local detector failed: {exc}")
+            return []
+
+        if not detections:
+            return []
+        # PaddleOCR returns per-image results
+        if isinstance(detections[0], list) and detections[0] and isinstance(detections[0][0], list):
+            candidates = detections[0]
+        else:
+            candidates = detections
+
+        boxes: list[list[int]] = []
+        for entry in candidates:
+            points = None
+            if isinstance(entry, (list, tuple)):
+                if len(entry) == 2 and isinstance(entry[0], (list, tuple)):
+                    points = entry[0]
+                elif len(entry) >= 4 and all(isinstance(pt, (list, tuple)) for pt in entry):
+                    points = entry
+            if not points:
+                continue
+            xs = [float(pt[0]) for pt in points]
+            ys = [float(pt[1]) for pt in points]
+            min_x = max(0, int(min(xs)))
+            min_y = max(0, int(min(ys)))
+            max_x = min(page_width, int(max(xs)))
+            max_y = min(page_height, int(max(ys)))
+            if max_x - min_x < 14 or max_y - min_y < 14:
+                continue
+            boxes.append([min_x, min_y, max_x, max_y])
+
+        boxes = self._filter_overlapping_boxes(boxes, threshold=0.5)
+        boxes.sort(key=lambda b: (b[1], b[0]))
+        return boxes
+
+    def _filter_overlapping_boxes(
+        self,
+        boxes: list[list[int]],
+        threshold: float = 0.5,
+    ) -> list[list[int]]:
+        filtered: list[list[int]] = []
+        for box in sorted(boxes, key=lambda b: (b[1], b[0])):
+            overlap = False
+            for kept in filtered:
+                if self._box_iou(box, kept) >= threshold:
+                    overlap = True
+                    break
+            if not overlap:
+                filtered.append(box)
+        return filtered
+
+    def _merge_bubble_sets(
+        self,
+        primary: list[tuple[list[int], str, CharacterAnalysis]],
+        secondary: list[tuple[list[int], str, CharacterAnalysis]],
+    ) -> list[tuple[list[int], str, CharacterAnalysis]]:
+        merged = list(primary)
+
+        def normalize(text: str) -> str:
+            return re.sub(r"\s+", " ", text.strip().lower())
+
+        for candidate_box, candidate_text, candidate_analysis in secondary:
+            norm_candidate = normalize(candidate_text)
+            duplicate = False
+            for existing_box, existing_text, _ in merged:
+                if self._box_iou(candidate_box, existing_box) >= 0.55:
+                    duplicate = True
+                    break
+                if normalize(existing_text) == norm_candidate:
+                    duplicate = True
+                    break
+            if not duplicate:
+                merged.append((candidate_box, candidate_text, candidate_analysis))
+
+        merged.sort(key=lambda item: (item[0][1], item[0][0]))
+        return merged
+
+    def _box_iou(self, a: list[int], b: list[int]) -> float:
+        ax1, ay1, ax2, ay2 = a
+        bx1, by1, bx2, by2 = b
+        inter_x1 = max(ax1, bx1)
+        inter_y1 = max(ay1, by1)
+        inter_x2 = min(ax2, bx2)
+        inter_y2 = min(ay2, by2)
+        if inter_x2 <= inter_x1 or inter_y2 <= inter_y1:
+            return 0.0
+        inter_area = (inter_x2 - inter_x1) * (inter_y2 - inter_y1)
+        area_a = max(0, ax2 - ax1) * max(0, ay2 - ay1)
+        area_b = max(0, bx2 - bx1) * max(0, by2 - by1)
+        union = area_a + area_b - inter_area
+        if union <= 0:
+            return 0.0
+        return inter_area / union
+
+    def _transcribe_local_boxes(
+        self,
+        image_path: Path,
+        boxes: list[list[int]],
+        page_height: int | float | None,
+    ) -> list[tuple[list[int], str, CharacterAnalysis]]:
+        if not boxes:
+            return []
+        try:
+            from PIL import Image
+
+            image = Image.open(image_path)
+        except Exception as exc:  # pragma: no cover - IO edge
+            print(f"⚠️ Could not open image for local transcription: {exc}")
+            return []
+
+        prompt = (
+            "Transcribe this manga speech bubble exactly as written. Preserve punctuation, "
+            "question marks, ellipses, shouting, and casing. Return ONLY the text."
+        )
+        results: list[tuple[list[int], str, CharacterAnalysis]] = []
+        for idx, bubble_box in enumerate(boxes, start=1):
+            crop = image.crop((bubble_box[0], bubble_box[1], bubble_box[2], bubble_box[3]))
+            if crop.width < 12 or crop.height < 12:
+                continue
+            img_base64 = self._encode_image(crop)
+            print(f"🧩 Local crop #{idx}: {bubble_box}")
+            text = self._call_openai(prompt, img_base64, max_tokens=220)
+            if not text:
+                continue
+            text = text.replace("\n", " ").replace("  ", " ").strip()
+            analysis = self._analyze_from_text(text, bubble_box, page_height)
+            results.append((bubble_box, text, analysis))
+        image.close()
+        return results
+
     def _analyze_from_text(
         self,
         text: str,
@@ -652,21 +887,10 @@ class VisionService:
         """Analyze text content to determine character type and emotion."""
         
         text_lower = text.lower()
-        alpha_chars = [char for char in text if char.isalpha()]
-        upper_ratio = (
-            sum(1 for char in alpha_chars if char.isupper()) / max(1, len(alpha_chars))
-        )
-        
         # Detect emotion from text patterns
         emotion = "neutral"
         tone = "normal"
         stability = 0.5
-
-        text_words = [word.strip("?!.,;:") for word in text_lower.split()]
-        alpha_chars = [char for char in text if char.isalpha()]
-        upper_ratio = (
-            sum(1 for char in alpha_chars if char.isupper()) / max(1, len(alpha_chars))
-        )
         
         # Question marks suggest confusion/uncertainty
         if "?" in text:
@@ -879,7 +1103,7 @@ class VisionService:
                 self.OPENAI_URL, headers=headers, json=payload, timeout=60
             )
             if response.status_code == 429:
-                wait_time = 0.75 * (attempt + 1)
+                wait_time = min(6.0, 1.5 * (attempt + 1))
                 print(
                     f"⚠️ Vision API rate limited (attempt {attempt + 1}/4). "
                     f"Retrying in {wait_time:.2f}s..."

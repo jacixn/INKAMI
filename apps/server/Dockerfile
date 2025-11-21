@@ -17,7 +17,7 @@ RUN apt-get update && \
 # Install Poetry + deps
 COPY pyproject.toml /app/pyproject.toml
 RUN pip install --no-cache-dir "poetry==${POETRY_VERSION}" && \
-    poetry install --only main --no-root
+    poetry install --only main --with vision --no-root
 
 # Copy application code
 COPY . /app

@@ -82,7 +82,8 @@ For local previews, run `npm run dev:web`. For the production static build the w
      S3_SECRET_KEY="..." \
      ELEVENLABS_API_KEY="..." \
      DEEPSICK_API_KEY="..." \
-     FRONTEND_URL="https://jacixn.github.io/INKAMI"
+       FRONTEND_URL="https://jacixn.github.io/INKAMI" \
+       EXTRA_CORS_ORIGINS="http://localhost:3000"
    ```
    (Add any other env vars from `apps/server/.env.example`.)
 4. **Deploy**

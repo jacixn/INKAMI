@@ -10,14 +10,39 @@ from app.core.config import settings
 
 app = FastAPI(title="Inkami API", version="0.1.0")
 
-frontend_url = settings.frontend_url.rstrip("/")
-parsed = urlparse(frontend_url)
-origin = f"{parsed.scheme}://{parsed.netloc}" if parsed.netloc else frontend_url
-allow_origins = {frontend_url, origin}
+def _add_origin_variants(raw: str, bucket: set[str]) -> None:
+    cleaned = raw.strip().rstrip("/")
+    if not cleaned:
+        return
+    bucket.add(cleaned)
+    parsed = urlparse(cleaned)
+    if parsed.scheme and parsed.netloc:
+        bucket.add(f"{parsed.scheme}://{parsed.netloc}")
+
+
+allow_origins: set[str] = set()
+_add_origin_variants(settings.frontend_url, allow_origins)
+
+default_dev_origins = {
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "https://localhost:3000",
+    "http://localhost:5173",
+}
+for origin in default_dev_origins:
+    _add_origin_variants(origin, allow_origins)
+
+extra_origins = [
+    origin
+    for origin in (settings.extra_cors_origins or "").split(",")
+    if origin.strip()
+]
+for origin in extra_origins:
+    _add_origin_variants(origin, allow_origins)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=list(allow_origins),
+    allow_origins=sorted(allow_origins),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

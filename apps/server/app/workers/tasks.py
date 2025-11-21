@@ -1,9 +1,15 @@
 from __future__ import annotations
 
+import tempfile
+from difflib import SequenceMatcher
 from pathlib import Path
 import re
-from typing import Iterable, TypedDict
+from typing import Any, Iterable, TypedDict
 
+import requests
+from PIL import Image
+
+from app.core.config import settings
 from app.models.schemas import (
     BubbleItem,
     ChapterPayload,
@@ -12,8 +18,7 @@ from app.models.schemas import (
     WordTime,
 )
 from app.services.pipeline import chapter_store
-from app.services.speaker import speaker_linker
-from app.services.tts import TTSResult, tts_service
+from app.services.tts import tts_service
 from app.services.vision import CharacterAnalysis, vision_service
 
 
@@ -35,8 +40,27 @@ def enqueue_chapter_job(
     chapter_store.update_job(
         job.job_id, status="processing", chapter_id=chapter_id, progress=5
     )
-    process_chapter(chapter_id, list(files), job.job_id, processing_mode, narrator_gender)
-    chapter_store.update_job(job.job_id, status="ready", progress=100)
+    placeholder = ChapterPayload(
+        chapter_id=chapter_id,
+        title=None,
+        status="processing",
+        progress=5,
+        pages=[],
+        processing_mode=processing_mode,
+    )
+    chapter_store.save_chapter(placeholder)
+
+    files_snapshot = [dict(item) for item in files]
+
+    chapter_store.queue.enqueue_call(
+        func=process_chapter,
+        args=(chapter_id, files_snapshot, job.job_id, processing_mode, narrator_gender),
+        job_id=f"chapter-{chapter_id}",
+        result_ttl=0,
+        failure_ttl=86400,
+        timeout=settings.job_timeout_seconds,
+    )
+
     return job.job_id
 
 
@@ -50,6 +74,70 @@ def _normalize_text(text: str) -> str:
     return cleaned.strip()
 
 
+def _clean_redundant_phrases(text: str) -> str:
+    """
+    Collapse repeated words/phrases like
+    "Turn an entire world turned an tire world upside down upside down".
+    """
+    lowered = text.lower()
+    if len(lowered) < 5:
+        return text
+
+    segments = re.split(r"([,.;!?])", text)
+    cleaned_segments: list[str] = []
+
+    for i in range(0, len(segments), 2):
+        segment = segments[i].strip()
+        punctuation = segments[i + 1] if i + 1 < len(segments) else ""
+        if not segment:
+            continue
+
+        words = segment.split()
+        deduped_words: list[str] = []
+        window = max(1, min(4, len(words) // 2))
+        last_phrases: set[str] = set()
+        buffer: list[str] = []
+
+        for word in words:
+            buffer.append(word)
+            if len(buffer) > window:
+                buffer.pop(0)
+            phrase = " ".join(buffer).lower()
+            if phrase in last_phrases:
+                # Skip repeating phrase
+                buffer.pop()
+                continue
+            last_phrases.add(phrase)
+            deduped_words.append(word)
+
+        cleaned = " ".join(deduped_words)
+        cleaned_segments.append(cleaned + punctuation)
+
+    final_text = " ".join(segment.strip() for segment in cleaned_segments if segment.strip())
+    return final_text or text
+
+
+def _humanize_caps_for_tts(text: str) -> str:
+    tokens = re.split(r"(\s+)", text)
+    transformed: list[str] = []
+
+    def should_soften(token: str) -> bool:
+        letters = [c for c in token if c.isalpha()]
+        if not letters:
+            return False
+        if any(c.islower() for c in token):
+            return False
+        if "." in token:
+            return False
+        # treat long all-caps or repeated letters as SFX words
+        return True
+
+    for token in tokens:
+        if should_soften(token):
+            transformed.append(token.lower())
+        else:
+            transformed.append(token)
+    return "".join(transformed)
 def _strip_sfx_prefix(text: str) -> str:
     return re.sub(r"^(?:sfx|fx)\s*[:\-]\s*", "", text, flags=re.IGNORECASE).strip()
 
@@ -83,6 +171,9 @@ APOLOGY_PATTERNS = {
     "i cannot assist with that",
 }
 
+MIN_GAP_HEIGHT = 380
+MAX_GAP_REGIONS = 5
+
 
 def _looks_like_sfx_text(text: str) -> bool:
     trimmed = text.strip()
@@ -104,10 +195,74 @@ def _looks_like_sfx_text(text: str) -> bool:
     return False
 
 
+def _recover_missing_bubbles(
+    image_path: Path,
+    page_width: int | None,
+    page_height: int | None,
+    bubbles: list[tuple[list[float], str, CharacterAnalysis]],
+) -> list[tuple[list[float], str, CharacterAnalysis]]:
+    if not bubbles:
+        return bubbles
+
+    try:
+        with Image.open(image_path) as image:
+            image_width = int(page_width or image.width)
+            total_height = int(page_height or image.height)
+
+            sorted_bubbles = sorted(bubbles, key=lambda entry: entry[0][1])
+            gaps: list[tuple[int, int]] = []
+            prev_bottom = 0
+
+            for bubble_box, _, _ in sorted_bubbles:
+                top = max(0, int(bubble_box[1]))
+                if top - prev_bottom >= MIN_GAP_HEIGHT:
+                    gaps.append((prev_bottom, min(top, total_height)))
+                prev_bottom = max(prev_bottom, int(bubble_box[3]))
+
+            if total_height - prev_bottom >= MIN_GAP_HEIGHT:
+                gaps.append((prev_bottom, total_height))
+
+            if not gaps:
+                return bubbles
+
+            recovered: list[tuple[list[float], str, CharacterAnalysis]] = []
+            for gap_start, gap_end in gaps[:MAX_GAP_REGIONS]:
+                if gap_end - gap_start < MIN_GAP_HEIGHT:
+                    continue
+
+                crop = image.crop((0, gap_start, image_width, gap_end))
+                if crop.height < 80:
+                    continue
+
+                with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
+                    temp_path = Path(tmp.name)
+                    crop.save(temp_path)
+                try:
+                    extra = vision_service.detect_and_read_all_bubbles(temp_path)
+                finally:
+                    temp_path.unlink(missing_ok=True)
+
+                for box, text, analysis in extra:
+                    adjusted_box = [
+                        box[0],
+                        box[1] + gap_start,
+                        box[2],
+                        box[3] + gap_start,
+                    ]
+                    recovered.append((adjusted_box, text, analysis))
+
+            if recovered:
+                print(f"✨ Gap recovery added {len(recovered)} bubble(s)")
+                return bubbles + recovered
+    except (FileNotFoundError, OSError) as exc:
+        print(f"⚠️ Gap recovery skipped: {exc}")
+
+    return bubbles
+
+
 def _build_tone_hint(text: str, analysis: CharacterAnalysis) -> str | None:
     hints: list[str] = []
     trimmed = text.strip()
-    lowered = trimmed.lower()
 
     if trimmed.endswith("?"):
         hints.append("Deliver it as a genuine question with a gentle rise at the end.")
@@ -205,7 +360,7 @@ def process_chapter(
     for index, file_info in enumerate(files):
         page_width = file_info.get("width") or 1080
         page_height = file_info.get("height") or 1920
-        image_path = Path(file_info["path"])
+        image_path = _ensure_local_image(file_info, chapter_id, index)
 
         # 🤖 USE DEEPSEEK VISION API TO DETECT AND READ ALL TEXT
         # OCR completely removed - Vision AI does everything!
@@ -221,25 +376,25 @@ def process_chapter(
             vision_bubbles = []
         
         if not vision_bubbles:
-            print(f"⚠️ Vision API found no bubbles (mode: {processing_mode}), creating fallback")
-            from app.services.vision import CharacterAnalysis
-            fallback_analysis = CharacterAnalysis(
-                character_type="unknown",
-                emotion="neutral",
-                tone="normal",
-                voice_suggestion="voice_narrator_f",
-                stability=0.5,
-                similarity_boost=0.75,
-                style=0.2,
+            print(
+                f"⚠️ Vision API returned no bubbles for page {index}; "
+                "keeping artwork but skipping audio."
             )
-            vision_bubbles = [
-                ([100, 200, page_width - 100, 400], "No text detected on this page.", fallback_analysis)
-            ]
-        
-        print(f"✨ Vision API found {len(vision_bubbles)} text elements (mode: {processing_mode})")
+        else:
+            print(
+                f"✨ Vision API found {len(vision_bubbles)} text elements (mode: {processing_mode})"
+            )
 
         # STEP 1: Collect all candidate bubbles (filter out obvious junk)
         candidates: list[tuple[list[float], str, Any, str]] = []
+        # Attempt to recover bubbles in large gaps that the main pass missed
+        vision_bubbles = _recover_missing_bubbles(
+            image_path,
+            page_width,
+            page_height,
+            vision_bubbles,
+        )
+
         for bubble_box, text, analysis in vision_bubbles:
             normalized_text = _normalize_text(text)
             bubble_type = _bubble_kind_from_analysis(analysis)
@@ -247,9 +402,7 @@ def process_chapter(
                 if _looks_like_sfx_text(normalized_text):
                     bubble_type = "sfx"
             
-            # FILTER OUT SFX AND HALLUCINATIONS
-            if bubble_type == "sfx":
-                continue
+            # FILTER OUT HALLUCINATIONS
             if normalized_text.lower() in {"jason", "json"}:
                 continue
             if len(normalized_text) < 2 and not normalized_text.isalnum():
@@ -285,12 +438,18 @@ def process_chapter(
                 
                 normalized_j = normalize_for_comparison(lower_j)
                 
-                # Check if they're substrings of each other (using normalized versions)
-                if normalized_i in normalized_j or normalized_j in normalized_i:
-                    longer = max(len(normalized_i), len(normalized_j))
-                    shorter = min(len(normalized_i), len(normalized_j))
-                    if shorter / longer > 0.75:  # >75% similar (lowered from 80% to catch more)
-                        similar_group.append((j, box_j, text_j, analysis_j, lower_j, normalized_j))
+                longer = max(len(normalized_i), len(normalized_j))
+                shorter = min(len(normalized_i), len(normalized_j))
+                substring_match = (
+                    normalized_i in normalized_j or normalized_j in normalized_i
+                )
+                length_ratio = shorter / longer if longer else 1.0
+                similarity = SequenceMatcher(None, normalized_i, normalized_j).ratio()
+
+                if substring_match and length_ratio > 0.7:
+                    similar_group.append((j, box_j, text_j, analysis_j, lower_j, normalized_j))
+                elif similarity >= 0.88:
+                    similar_group.append((j, box_j, text_j, analysis_j, lower_j, normalized_j))
             
             # Pick the LONGEST one from the group (most complete sentence)
             # Use the normalized length for comparison
@@ -306,6 +465,8 @@ def process_chapter(
         # STEP 3: Generate TTS for unique bubbles
         items: list[BubbleItem] = []
         for bubble_idx, (bubble_box, normalized_text, analysis) in enumerate(unique_bubbles):
+            cleaned_text = _clean_redundant_phrases(normalized_text)
+            tts_ready_text = _humanize_caps_for_tts(cleaned_text)
             bubble_type = _bubble_kind_from_analysis(analysis)
                 
             character_key = (analysis.character_type or "").strip().lower()
@@ -350,12 +511,9 @@ def process_chapter(
                     else None
                 )
             
-            if bubble_type == "sfx":
-                continue # Should be caught above, but safe keeping
-            
             # Generate TTS with emotion parameters
-            tone_hint = _build_tone_hint(normalized_text, analysis)
-            delivery_text = _build_tts_delivery_text(normalized_text, analysis)
+            tone_hint = _build_tone_hint(cleaned_text, analysis)
+            delivery_text = _build_tts_delivery_text(tts_ready_text, analysis)
             tts_result = tts_service.synthesize(
                 delivery_text,
                 assigned_voice,
@@ -374,7 +532,7 @@ def process_chapter(
                     speaker_id=f"{chapter_id[:6]}_speaker_{index}_{bubble_idx}",
                     speaker_name=speaker_label,
                     voice_id=assigned_voice,
-                    text=normalized_text,
+                    text=cleaned_text,
                     audio_url=tts_result.audio_url,
                     word_times=[WordTime(**word.model_dump()) for word in tts_result.word_times],
                 )
@@ -405,4 +563,29 @@ def process_chapter(
         processing_mode=processing_mode,
     )
     chapter_store.save_chapter(chapter)
+    if job_id:
+        chapter_store.update_job(job_id, status="ready", progress=100)
+
+
+def _ensure_local_image(file_info: ChapterFile, chapter_id: str, index: int) -> Path:
+    path = Path(file_info["path"])
+    if path.exists():
+        return path
+
+    image_url = file_info.get("image_url")
+    if not image_url:
+        raise FileNotFoundError(
+            f"Unable to locate file for chapter {chapter_id} page {index}: {path}"
+        )
+
+    cache_dir = Path(settings.upload_dir) / "worker-cache" / chapter_id
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    suffix = Path(file_info.get("filename") or "").suffix or ".png"
+    local_path = cache_dir / f"{chapter_id}_{index:04d}{suffix}"
+
+    print(f"📥 Downloading page {index} for chapter {chapter_id} from {image_url}")
+    response = requests.get(image_url, timeout=60)
+    response.raise_for_status()
+    local_path.write_bytes(response.content)
+    return local_path
 

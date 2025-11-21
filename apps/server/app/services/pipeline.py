@@ -5,6 +5,8 @@ from redis import Redis
 
 from app.core.config import settings
 from app.models.schemas import ChapterPayload, JobStatus, SpeakerUpdate
+from rq import Queue
+
 from app.services.tts import tts_service
 
 
@@ -17,6 +19,7 @@ class ChapterStore:
         self.redis = _redis_client()
         self.chapter_key = "chapters"
         self.job_key = "jobs"
+        self.queue = Queue(settings.job_queue_name, connection=self.redis)
 
     def create_job(self) -> JobStatus:
         job = JobStatus(job_id=str(uuid.uuid4()), status="queued", progress=0)

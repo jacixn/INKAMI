@@ -16,34 +16,54 @@ const BASE_CANVAS_HEIGHT = 1920;
 const AUTO_HIDE_DELAY_MS = 5000;
 
 // Custom smooth scroll helper
-function smoothScrollTo(element: HTMLElement, target: number, duration: number) {
+function smoothScrollTo(
+  element: HTMLElement,
+  target: number,
+  duration: number
+): (() => void) | undefined {
+  if (duration <= 0) {
+    element.scrollTop = target;
+    return;
+  }
+
   const start = element.scrollTop;
   const distance = target - start;
   const startTime = performance.now();
+  let frameId: number;
+  let cancelled = false;
 
-  function step(currentTime: number) {
+  const step = (currentTime: number) => {
+    if (cancelled) return;
     const elapsed = currentTime - startTime;
     const progress = Math.min(elapsed / duration, 1);
-    
-    // EaseInOutQuad
-    const ease = progress < 0.5
-      ? 2 * progress * progress
-      : 1 - Math.pow(-2 * progress + 2, 2) / 2;
+
+    const ease =
+      progress < 0.5
+        ? 2 * progress * progress
+        : 1 - Math.pow(-2 * progress + 2, 2) / 2;
 
     element.scrollTop = start + distance * ease;
 
     if (progress < 1) {
-      requestAnimationFrame(step);
+      frameId = requestAnimationFrame(step);
     }
-  }
+  };
 
-  requestAnimationFrame(step);
+  frameId = requestAnimationFrame(step);
+  return () => {
+    cancelled = true;
+    if (frameId) {
+      cancelAnimationFrame(frameId);
+    }
+  };
 }
 
 export default function ImmersiveReader({ controller }: ImmersiveReaderProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const fullscreenRef = useRef<HTMLDivElement>(null);
   const hideTimerRef = useRef<number | null>(null);
+  const lastScrollTargetRef = useRef<number | null>(null);
+  const cancelScrollRef = useRef<(() => void) | null>(null);
 
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [controlsVisible, setControlsVisible] = useState(true);
@@ -56,16 +76,34 @@ export default function ImmersiveReader({ controller }: ImmersiveReaderProps) {
   }, [page, controller.currentBubbleId]);
 
   useEffect(() => {
-    if (!scrollRef.current || !activeBubble || !page || !page.height) return;
+    if (!scrollRef.current || !activeBubble || !page?.height) return;
     const container = scrollRef.current;
-    const scale = container.scrollHeight / page.height;
+    const scale =
+      page.height > 0 ? container.scrollHeight / page.height : 1;
     const target = Math.max(
       activeBubble.bubble_box[1] * scale - container.clientHeight / 3,
       0
     );
-    
-    // Use custom smooth scroll with 1000ms duration
-    smoothScrollTo(container, target, 1000);
+
+    const lastTarget =
+      lastScrollTargetRef.current ?? container.scrollTop ?? 0;
+    const distance = Math.abs(target - lastTarget);
+    lastScrollTargetRef.current = target;
+
+    const baseDuration = 650;
+    const distanceFactor = distance * 0.45;
+    const duration = Math.min(
+      2600,
+      Math.max(baseDuration, distanceFactor)
+    );
+
+    cancelScrollRef.current?.();
+    cancelScrollRef.current = smoothScrollTo(container, target, duration);
+
+    return () => {
+      cancelScrollRef.current?.();
+      cancelScrollRef.current = null;
+    };
   }, [activeBubble, controller.currentPageIndex, page]);
 
   const clearHideTimer = useCallback(() => {

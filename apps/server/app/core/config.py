@@ -8,6 +8,7 @@ class Settings(BaseSettings):
 
     app_env: str = "dev"
     frontend_url: str = "http://localhost:3000"
+    extra_cors_origins: str = ""
     upload_dir: str = "/tmp/inkami/uploads"
     database_url: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/inkami"
     redis_url: str = "redis://localhost:6379/0"
@@ -27,6 +28,9 @@ class Settings(BaseSettings):
     google_application_credentials: str | None = None
     tts_provider_priority: str = "openai"
     force_https_assets: bool = True
+    enable_local_detector: bool = True
+    vision_single_pass: bool = False
+    job_timeout_seconds: int = 900
 
 
 @lru_cache(maxsize=1)
